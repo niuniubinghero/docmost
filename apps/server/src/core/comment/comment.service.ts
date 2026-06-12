@@ -206,6 +206,58 @@ export class CommentService {
     return comment;
   }
 
+  async resolveComment(commentId: string, userId: string): Promise<Comment> {
+    const comment = await this.findById(commentId);
+
+    if (comment.resolvedAt) {
+      throw new BadRequestException('Comment is already resolved');
+    }
+
+    await this.commentRepo.updateComment(
+      {
+        resolvedAt: new Date(),
+        resolvedById: userId,
+      },
+      commentId,
+    );
+
+    const updatedComment = await this.findById(commentId);
+
+    this.wsService.emitCommentEvent(comment.spaceId, comment.pageId, {
+      operation: 'commentResolved',
+      pageId: comment.pageId,
+      comment: updatedComment,
+    });
+
+    return updatedComment;
+  }
+
+  async reopenComment(commentId: string): Promise<Comment> {
+    const comment = await this.findById(commentId);
+
+    if (!comment.resolvedAt) {
+      throw new BadRequestException('Comment is not resolved');
+    }
+
+    await this.commentRepo.updateComment(
+      {
+        resolvedAt: null,
+        resolvedById: null,
+      },
+      commentId,
+    );
+
+    const updatedComment = await this.findById(commentId);
+
+    this.wsService.emitCommentEvent(comment.spaceId, comment.pageId, {
+      operation: 'commentReopened',
+      pageId: comment.pageId,
+      comment: updatedComment,
+    });
+
+    return updatedComment;
+  }
+
   private async queueCommentNotification(
     content: any,
     oldMentionIds: string[],

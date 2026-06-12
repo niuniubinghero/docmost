@@ -193,4 +193,64 @@ export class CommentController {
       },
     });
   }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('resolve')
+  async resolve(@Body() input: CommentIdDto, @AuthUser() user: User, @AuthWorkspace() workspace: Workspace) {
+    const comment = await this.commentRepo.findById(input.commentId);
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.pageRepo.findById(comment.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+
+    const resolvedComment = await this.commentService.resolveComment(comment.id, user.id);
+
+    this.auditService.log({
+      event: AuditEvent.COMMENT_RESOLVED,
+      resourceType: AuditResource.COMMENT,
+      resourceId: comment.id,
+      spaceId: comment.spaceId,
+      metadata: {
+        pageId: comment.pageId,
+      },
+    });
+
+    return resolvedComment;
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('reopen')
+  async reopen(@Body() input: CommentIdDto, @AuthUser() user: User, @AuthWorkspace() workspace: Workspace) {
+    const comment = await this.commentRepo.findById(input.commentId);
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.pageRepo.findById(comment.pageId);
+    if (!page) {
+      throw new NotFoundException('Page not found');
+    }
+
+    await this.pageAccessService.validateCanComment(page, user, workspace.id);
+
+    const reopenedComment = await this.commentService.reopenComment(comment.id);
+
+    this.auditService.log({
+      event: AuditEvent.COMMENT_REOPENED,
+      resourceType: AuditResource.COMMENT,
+      resourceId: comment.id,
+      spaceId: comment.spaceId,
+      metadata: {
+        pageId: comment.pageId,
+      },
+    });
+
+    return reopenedComment;
+  }
 }
