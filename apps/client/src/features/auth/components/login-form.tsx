@@ -11,6 +11,7 @@ import {
   Box,
   Anchor,
   Group,
+  Divider,
 } from "@mantine/core";
 import classes from "./auth.module.css";
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
@@ -18,6 +19,7 @@ import { Link } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { useTranslation } from "react-i18next";
 import SsoLogin from "@/ee/components/sso-login.tsx";
+import CasdoorLogin from "@/ee/components/casdoor-login.tsx";
 import { useWorkspacePublicDataQuery } from "@/features/workspace/queries/workspace-query.ts";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import React from "react";
@@ -78,6 +80,10 @@ export function LoginForm() {
           </Title>
 
           <SsoLogin />
+
+          <CasdoorLogin />
+
+          <Divider my="xs" label="OR" labelPosition="center" />
 
           {!data?.enforceSso && (
             <>

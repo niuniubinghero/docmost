@@ -360,4 +360,24 @@ export class EnvironmentService {
       .map((o) => o.trim())
       .filter(Boolean);
   }
+
+  getCasdoorEndpoint(): string {
+    return this.configService.get<string>('CASDOOR_ENDPOINT', 'http://localhost:8000');
+  }
+
+  getCasdoorClientId(): string {
+    return this.configService.get<string>('CASDOOR_CLIENT_ID', '');
+  }
+
+  getCasdoorClientSecret(): string {
+    return this.configService.get<string>('CASDOOR_CLIENT_SECRET', '');
+  }
+
+  getCasdoorOrganization(): string {
+    return this.configService.get<string>('CASDOOR_ORGANIZATION', 'docmost');
+  }
+
+  getCasdoorApplication(): string {
+    return this.configService.get<string>('CASDOOR_APPLICATION', 'docmost');
+  }
 }

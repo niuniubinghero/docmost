@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Inject,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -17,6 +19,7 @@ import {
 } from '../../integrations/throttle/throttler-names';
 import { LoginDto } from './dto/login.dto';
 import { AuthService } from './services/auth.service';
+import { CasdoorService } from './services/casdoor.service';
 import { SessionService } from '../session/session.service';
 import { SetupGuard } from './guards/setup.guard';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
@@ -37,6 +40,7 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../integrations/audit/audit.service';
+import { Public } from '../../common/decorators/public.decorator';
 
 @SkipThrottle({ [AI_CHAT_THROTTLER]: true })
 @UseGuards(ThrottlerGuard)
@@ -46,6 +50,7 @@ export class AuthController {
 
   constructor(
     private authService: AuthService,
+    private casdoorService: CasdoorService,
     private sessionService: SessionService,
     private environmentService: EnvironmentService,
     private moduleRef: ModuleRef,
@@ -217,6 +222,42 @@ export class AuthController {
       resourceType: AuditResource.USER,
       resourceId: user.id,
     });
+  }
+
+  @Public()
+  @Get('casdoor/login')
+  async casdoorLogin(@Res() res: FastifyReply, @Query('workspaceId') workspaceId: string) {
+    const state = Buffer.from(JSON.stringify({ workspaceId })).toString('base64');
+    const loginUrl = this.casdoorService.getLoginUrl(state);
+    res.redirect(loginUrl);
+  }
+
+  @Public()
+  @Get('casdoor/callback')
+  async casdoorCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res({ passthrough: true }) res: FastifyReply,
+  ) {
+    try {
+      const { workspaceId } = JSON.parse(Buffer.from(state, 'base64').toString());
+      const authToken = await this.casdoorService.handleCallback(code, workspaceId);
+
+      res.setCookie('authToken', authToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        expires: this.environmentService.getCookieExpiresIn(),
+        secure: this.environmentService.isHttps(),
+      });
+
+      const appUrl = this.environmentService.getAppUrl();
+      res.redirect(`${appUrl}/home`);
+    } catch (error) {
+      this.logger.error('Casdoor callback failed', error);
+      const appUrl = this.environmentService.getAppUrl();
+      res.redirect(`${appUrl}/login?error=casdoor_auth_failed`);
+    }
   }
 
   setAuthCookie(res: FastifyReply, token: string) {
