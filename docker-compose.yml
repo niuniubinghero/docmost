@@ -6,7 +6,7 @@ services:
       - redis
     environment:
       APP_URL: 'http://localhost:3000'
-      APP_SECRET: 'REPLACE_WITH_LONG_SECRET'
+      APP_SECRET: 'docmost-secret-key-for-development-2024'
       DATABASE_URL: 'postgresql://docmost:STRONG_DB_PASSWORD@db:5432/docmost'
       REDIS_URL: 'redis://redis:6379'
     ports:
@@ -14,6 +14,19 @@ services:
     restart: unless-stopped
     volumes:
       - docmost:/app/data/storage
+
+  casdoor:
+    image: casbin/casdoor:latest
+    depends_on:
+      - db
+    environment:
+      driverName: postgres
+      dataSourceName: "host=db port=5432 user=docmost password=STRONG_DB_PASSWORD dbname=casdoor sslmode=disable"
+      origin: 'http://localhost:8000'
+      staticBaseUrl: 'https://cdn.jsdelivr.net/gh/casbin/static-resources@latest'
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
 
   db:
     image: postgres:18
@@ -24,6 +37,7 @@ services:
     restart: unless-stopped
     volumes:
       - db_data:/var/lib/postgresql
+      - ./docker-init/init-casdoor-db.sql:/docker-entrypoint-initdb.d/init-casdoor-db.sql
 
   redis:
     image: redis:8
