@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AttachmentService } from './services/attachment.service';
+import { AttachmentIndexService } from './services/attachment-index.service';
 import { AttachmentController } from './attachment.controller';
 import { StorageModule } from '../../integrations/storage/storage.module';
 import { UserModule } from '../user/user.module';
@@ -10,6 +11,6 @@ import { TokenModule } from '../auth/token.module';
 @Module({
   imports: [StorageModule, UserModule, WorkspaceModule, TokenModule],
   controllers: [AttachmentController],
-  providers: [AttachmentService, AttachmentProcessor],
+  providers: [AttachmentService, AttachmentIndexService, AttachmentProcessor],
 })
 export class AttachmentModule {}
