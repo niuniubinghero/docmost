@@ -99,6 +99,11 @@ export const AuditEvent = {
   // Attachment
   ATTACHMENT_UPLOADED: 'attachment.uploaded',
   // ATTACHMENT_DELETED: 'attachment.deleted',
+
+  // Template
+  TEMPLATE_CREATE: 'template.created',
+  TEMPLATE_UPDATE: 'template.updated',
+  TEMPLATE_DELETE: 'template.deleted',
 } as const;
 
 export type AuditEventType = (typeof AuditEvent)[keyof typeof AuditEvent];
@@ -129,6 +134,7 @@ export const AuditResource = {
   WORKSPACE_INVITATION: 'workspace_invitation',
   ATTACHMENT: 'attachment',
   LICENSE: 'license',
+  TEMPLATE: 'template',
 } as const;
 
 export type AuditResourceType =
