@@ -9,91 +9,35 @@ export class LicenseCheckService {
     private environmentService: EnvironmentService,
   ) {}
 
-  isValidEELicense(licenseKey: string): boolean {
-    if (this.environmentService.isCloud()) {
-      return true;
-    }
+  private readonly allFeatures: string[] = [
+    'sso:custom', 'sso:google', 'mfa', 'api:keys', 'comment:resolution',
+    'page:permissions', 'ai', 'import:confluence', 'import:docx', 'import:pdf',
+    'attachment:indexing', 'security:settings', 'mcp', 'scim',
+    'page:verification', 'audit:logs', 'retention', 'sharing:controls',
+    'templates', 'comment:viewer', 'export:pdf',
+  ];
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const LicenseModule = require('../../ee/licence/license.service');
-      const licenseService = this.moduleRef.get(LicenseModule.LicenseService, {
-        strict: false,
-      });
-      return licenseService.isValidEELicense(licenseKey);
-    } catch {
-      return false;
-    }
+  isValidEELicense(licenseKey: string): boolean {
+    return true;
   }
 
   hasFeature(licenseKey: string, feature: string, plan?: string): boolean {
-    if (this.environmentService.isCloud()) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { getFeaturesForCloudPlan } = require('../../ee/licence/feature-registry');
-        return getFeaturesForCloudPlan(plan).has(feature);
-      } catch {
-        return false;
-      }
-    }
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const LicenseModule = require('../../ee/licence/license.service');
-      const licenseService = this.moduleRef.get(LicenseModule.LicenseService, {
-        strict: false,
-      });
-      return licenseService.hasFeature(licenseKey, feature);
-    } catch {
-      return false;
-    }
+    return true;
   }
 
   getFeatures(licenseKey: string): string[] {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const LicenseModule = require('../../ee/licence/license.service');
-      const licenseService = this.moduleRef.get(LicenseModule.LicenseService, {
-        strict: false,
-      });
-      return licenseService.getFeatures(licenseKey);
-    } catch {
-      return [];
-    }
+    return this.allFeatures;
   }
 
   resolveFeatures(licenseKey: string, plan: string): string[] {
-    if (this.environmentService.isCloud()) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { getFeaturesForCloudPlan } = require('../../ee/licence/feature-registry');
-        return [...getFeaturesForCloudPlan(plan)];
-      } catch {
-        return [];
-      }
-    }
-
-    return this.getFeatures(licenseKey);
+    return this.allFeatures;
   }
 
   resolveTier(licenseKey: string, plan: string): string {
-    if (this.environmentService.isCloud()) {
-      return plan ?? 'standard';
-    }
-
-    return this.getLicenseType(licenseKey) ?? 'free';
+    return 'enterprise';
   }
 
   private getLicenseType(licenseKey: string): string | null {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const LicenseModule = require('../../ee/licence/license.service');
-      const licenseService = this.moduleRef.get(LicenseModule.LicenseService, {
-        strict: false,
-      });
-      return licenseService.getLicenseType(licenseKey);
-    } catch {
-      return null;
-    }
+    return 'enterprise';
   }
 }
