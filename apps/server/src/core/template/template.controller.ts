@@ -29,7 +29,7 @@ export class TemplateController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
-  @Post('list')
+  @Post()
   async getTemplates(
     @Body() pagination: PaginationOptions,
     @AuthWorkspace() workspace: Workspace,
@@ -47,7 +47,7 @@ export class TemplateController {
   }
 
   @HttpCode(HttpStatus.OK)
-  @Post()
+  @Post('create')
   async createTemplate(
     @Body() dto: CreateTemplateDto,
     @AuthUser() user: User,
@@ -96,5 +96,21 @@ export class TemplateController {
     }
 
     return this.templateService.deleteTemplate(body.templateId, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('use')
+  async useTemplate(
+    @Body() body: { templateId: string; spaceId: string; parentPageId?: string },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.templateService.useTemplate(
+      body.templateId,
+      workspace.id,
+      user.id,
+      body.spaceId,
+      body.parentPageId,
+    );
   }
 }

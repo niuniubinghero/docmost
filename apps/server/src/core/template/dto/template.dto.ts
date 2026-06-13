@@ -9,9 +9,9 @@ export class CreateTemplateDto {
   @IsString()
   description?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsObject()
-  content: any;
+  content?: any;
 
   @IsOptional()
   @IsString()
