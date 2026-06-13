@@ -27,6 +27,8 @@ import { TemplateModule } from './template/template.module';
 import { ApiKeyModule } from './api-key/api-key.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { AiModule } from './ai/ai.module';
+import { AiProviderModule } from './ai-provider/ai-provider.module';
+import { AiChatModule } from './ai-chat/ai-chat.module';
 import { PageVerificationModule } from './page-verification/page-verification.module';
 import { ClsMiddleware } from 'nestjs-cls';
 
@@ -53,6 +55,8 @@ import { ClsMiddleware } from 'nestjs-cls';
     ApiKeyModule,
     AuditLogModule,
     AiModule,
+    AiProviderModule,
+    AiChatModule,
     PageVerificationModule,
   ],
 })
