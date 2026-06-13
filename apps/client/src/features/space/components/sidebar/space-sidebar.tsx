@@ -1,7 +1,9 @@
 import {
   ActionIcon,
+  Button,
   Group,
   Menu,
+  Modal,
   Text,
   Tooltip,
   UnstyledButton,
@@ -12,6 +14,7 @@ import {
   IconEye,
   IconEyeOff,
   IconFileExport,
+  IconFilePlus,
   IconHome,
   IconPlus,
   IconSearch,
@@ -67,6 +70,10 @@ export function SpaceSidebar() {
     useDisclosure(false);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+  const [createChoiceOpened, { open: openCreateChoice, close: closeCreateChoice }] =
+    useDisclosure(false);
+  const [templatePickerOpened, { open: openTemplatePicker, close: closeTemplatePicker }] =
+    useDisclosure(false);
 
   const { spaceSlug } = useParams();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
@@ -74,13 +81,25 @@ export function SpaceSidebar() {
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
   const { handleCreate } = useTreeMutation(space?.id ?? "");
+  const hasTemplates = useHasFeature(Feature.TEMPLATES);
 
   if (!space) {
     return <></>;
   }
 
-  function handleCreatePage() {
+  function handleCreateBlankPage() {
+    closeCreateChoice();
     handleCreate(null);
+    if (mobileSidebarOpened) {
+      toggleMobileSidebar();
+    }
+  }
+
+  function handleCreateFromTemplate() {
+    closeCreateChoice();
+    if (hasTemplates) {
+      openTemplatePicker();
+    }
   }
 
   return (
@@ -162,10 +181,7 @@ export function SpaceSidebar() {
               <UnstyledButton
                 className={classes.menu}
                 onClick={() => {
-                  handleCreatePage();
-                  if (mobileSidebarOpened) {
-                    toggleMobileSidebar();
-                  }
+                  openCreateChoice();
                 }}
               >
                 <div className={classes.menuItemInner}>
@@ -205,7 +221,7 @@ export function SpaceSidebar() {
                   <ActionIcon
                     variant="default"
                     size={18}
-                    onClick={handleCreatePage}
+                    onClick={openCreateChoice}
                     aria-label={t("Create page")}
                   >
                     <IconPlus />
@@ -232,6 +248,80 @@ export function SpaceSidebar() {
         onClose={closeSettings}
         spaceId={space?.slug}
       />
+
+      <Modal
+        opened={createChoiceOpened}
+        onClose={closeCreateChoice}
+        size={550}
+        padding="lg"
+        yOffset="10vh"
+        title={<Text fw={500}>{t("Create new page")}</Text>}
+      >
+        <Text size="sm" c="dimmed" mb="md">
+          {t("How would you like to create your page?")}
+        </Text>
+        <Group gap="md">
+          <UnstyledButton
+            onClick={handleCreateBlankPage}
+            style={{
+              flex: 1,
+              padding: "var(--mantine-spacing-lg)",
+              borderRadius: "var(--mantine-radius-md)",
+              border: "1px solid var(--mantine-color-gray-3)",
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "border-color 0.2s, background-color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--mantine-color-blue-5)";
+              e.currentTarget.style.backgroundColor = "var(--mantine-color-blue-0)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--mantine-color-gray-3)";
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
+          >
+            <IconFilePlus size={32} stroke={1.5} style={{ marginBottom: 8, color: "var(--mantine-color-gray-6)" }} />
+            <Text size="sm" fw={500}>{t("Blank page")}</Text>
+            <Text size="xs" c="dimmed">{t("Start from scratch")}</Text>
+          </UnstyledButton>
+
+          <UnstyledButton
+            onClick={handleCreateFromTemplate}
+            style={{
+              flex: 1,
+              padding: "var(--mantine-spacing-lg)",
+              borderRadius: "var(--mantine-radius-md)",
+              border: "1px solid var(--mantine-color-gray-3)",
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "border-color 0.2s, background-color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--mantine-color-blue-5)";
+              e.currentTarget.style.backgroundColor = "var(--mantine-color-blue-0)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--mantine-color-gray-3)";
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
+          >
+            <IconTemplate size={32} stroke={1.5} style={{ marginBottom: 8, color: "var(--mantine-color-gray-6)" }} />
+            <Text size="sm" fw={500}>{t("From template")}</Text>
+            <Text size="xs" c="dimmed">{t("Use a pre-built template")}</Text>
+          </UnstyledButton>
+        </Group>
+      </Modal>
+
+      {hasTemplates && templatePickerOpened && (
+        <ErrorBoundary fallbackRender={() => null}>
+          <TemplatePickerModal
+            opened={templatePickerOpened}
+            onClose={closeTemplatePicker}
+            initialSpaceId={space.id}
+          />
+        </ErrorBoundary>
+      )}
     </>
   );
 }

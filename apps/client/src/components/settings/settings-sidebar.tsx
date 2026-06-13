@@ -15,6 +15,7 @@ import {
   IconSparkles,
   IconHistory,
   IconShieldCheck,
+  IconPlug,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -115,6 +116,12 @@ const groupedData: DataGroup[] = [
         label: "AI settings",
         icon: IconSparkles,
         path: "/settings/ai",
+        role: "admin",
+      },
+      {
+        label: "AI Providers",
+        icon: IconPlug,
+        path: "/settings/ai-providers",
         role: "admin",
       },
       {

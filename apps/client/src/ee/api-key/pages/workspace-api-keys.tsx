@@ -13,7 +13,6 @@ import Paginate from "@/components/common/paginate";
 import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
 import { useGetApiKeysQuery } from "@/ee/api-key/queries/api-key-query.ts";
 import { IApiKey } from "@/ee/api-key";
-import useUserRole from '@/hooks/use-user-role.tsx';
 import RestrictApiToAdmins from "@/ee/api-key/components/restrict-api-to-admins";
 
 export default function WorkspaceApiKeys() {
@@ -25,11 +24,6 @@ export default function WorkspaceApiKeys() {
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
   const { data, isLoading } = useGetApiKeysQuery({ cursor, adminView: true });
-  const { isAdmin } = useUserRole();
-
-  if (!isAdmin) {
-    return null;
-  }
 
   const handleCreateSuccess = (response: IApiKey) => {
     setCreatedApiKey(response);
@@ -83,7 +77,7 @@ export default function WorkspaceApiKeys() {
 
       <Space h="md" />
 
-      {data?.items.length > 0 && (
+      {data?.items && data.items.length > 0 && (
         <Paginate
           hasPrevPage={data?.meta?.hasPrevPage}
           hasNextPage={data?.meta?.hasNextPage}

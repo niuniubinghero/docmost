@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Anchor, Alert, Button, Group, Space, Text } from "@mantine/core";
+import { Anchor, Alert, Button, Group, Loader, Space, Text } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { Helmet } from "react-helmet-async";
 import { Trans, useTranslation } from "react-i18next";
@@ -26,12 +26,36 @@ export default function UserApiKeys() {
   const [updateModalOpened, setUpdateModalOpened] = useState(false);
   const [revokeModalOpened, setRevokeModalOpened] = useState(false);
   const [selectedApiKey, setSelectedApiKey] = useState<IApiKey | null>(null);
-  const { data, isLoading } = useGetApiKeysQuery({ cursor });
+  const { data, isLoading, error } = useGetApiKeysQuery({ cursor });
   const [workspace] = useAtom(workspaceAtom);
   const { isAdmin } = useUserRole();
   const mcpEnabled = workspace?.settings?.ai?.mcp === true;
   const restrictToAdmins = workspace?.settings?.api?.restrictToAdmins === true;
   const canCreate = !restrictToAdmins || isAdmin;
+
+  if (isLoading) {
+    return (
+      <Group justify="center" py="xl">
+        <Loader />
+      </Group>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Helmet>
+          <title>
+            {t("API keys")} - {getAppName()}
+          </title>
+        </Helmet>
+        <SettingsTitle title={t("API keys")} />
+        <Alert icon={<IconInfoCircle size={16} />} color="red" title={t("Error loading API keys")}>
+          {error.message || t("Failed to load API keys. Please try again.")}
+        </Alert>
+      </>
+    );
+  }
 
   const handleCreateSuccess = (response: IApiKey) => {
     setCreatedApiKey(response);
@@ -112,7 +136,7 @@ export default function UserApiKeys() {
 
       <Space h="md" />
 
-      {data?.items.length > 0 && (
+      {data?.items && data.items.length > 0 && (
         <Paginate
           hasPrevPage={data?.meta?.hasPrevPage}
           hasNextPage={data?.meta?.hasNextPage}
