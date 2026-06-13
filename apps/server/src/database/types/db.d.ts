@@ -35,6 +35,7 @@ export interface ApiKeys {
   deletedAt: Timestamp | null;
   expiresAt: Timestamp | null;
   id: Generated<string>;
+  keyHash: string | null;
   lastUsedAt: Timestamp | null;
   name: string | null;
   updatedAt: Generated<Timestamp>;
@@ -574,6 +575,21 @@ export interface AiChatMessages {
   deletedAt: Timestamp | null;
 }
 
+export interface AiProviders {
+  id: Generated<string>;
+  workspaceId: string;
+  name: string;
+  type: string;
+  apiKey: string | null;
+  baseUrl: string | null;
+  modelName: string;
+  isDefault: Generated<boolean>;
+  isActive: Generated<boolean>;
+  config: Generated<Json>;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
 export interface UserSessions {
   id: Generated<string>;
   userId: string;
@@ -592,6 +608,7 @@ export interface UserSessions {
 export interface DB {
   aiChats: AiChats;
   aiChatMessages: AiChatMessages;
+  aiProviders: AiProviders;
   apiKeys: ApiKeys;
   attachments: Attachments;
   audit: Audit;

@@ -37,6 +37,36 @@ export class ApiKeyService {
     return { apiKey, rawKey };
   }
 
+  async updateApiKey(
+    keyId: string,
+    workspaceId: string,
+    data: { name?: string },
+  ) {
+    const apiKey = await this.apiKeyRepo.findById(keyId, workspaceId);
+    if (!apiKey) {
+      throw new NotFoundException('API key not found');
+    }
+
+    await this.apiKeyRepo.update(keyId, workspaceId, data);
+
+    return this.apiKeyRepo.findById(keyId, workspaceId);
+  }
+
+  async revokeApiKey(keyId: string, workspaceId: string) {
+    const apiKey = await this.apiKeyRepo.findById(keyId, workspaceId);
+    if (!apiKey) {
+      throw new NotFoundException('API key not found');
+    }
+
+    await this.apiKeyRepo.revoke(keyId, workspaceId);
+
+    this.auditService.log({
+      event: AuditEvent.API_KEY_DELETED,
+      resourceType: AuditResource.API_KEY,
+      resourceId: keyId,
+    });
+  }
+
   async deleteApiKey(keyId: string, workspaceId: string) {
     const apiKey = await this.apiKeyRepo.findById(keyId, workspaceId);
     if (!apiKey) {

@@ -28,28 +28,41 @@ export class ApiKeyController {
   ) {}
 
   @HttpCode(HttpStatus.OK)
-  @Post('list')
+  @Post()
   async getApiKeys(
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const ability = this.workspaceAbility.createForUser(user, workspace);
-    if (
-      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)
-    ) {
-      throw new ForbiddenException();
-    }
-
     return this.apiKeyService.getApiKeys(workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
-  @Post()
+  @Post('create')
   async createApiKey(
     @Body() dto: CreateApiKeyDto,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    return this.apiKeyService.createApiKey(dto, workspace.id, user.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('update')
+  async updateApiKey(
+    @Body() body: { apiKeyId: string; name?: string },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.apiKeyService.updateApiKey(body.apiKeyId, workspace.id, body);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('revoke')
+  async revokeApiKey(
+    @Body() body: { apiKeyId: string },
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
     const ability = this.workspaceAbility.createForUser(user, workspace);
     if (
       ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)
@@ -57,7 +70,7 @@ export class ApiKeyController {
       throw new ForbiddenException();
     }
 
-    return this.apiKeyService.createApiKey(dto, workspace.id, user.id);
+    return this.apiKeyService.revokeApiKey(body.apiKeyId, workspace.id);
   }
 
   @HttpCode(HttpStatus.OK)
