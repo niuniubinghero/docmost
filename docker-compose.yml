@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:18
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_DB: docmost
       POSTGRES_USER: docmost
@@ -40,6 +40,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql
       - ./docker-init/init-casdoor-db.sql:/docker-entrypoint-initdb.d/init-casdoor-db.sql
+      - ./docker-init/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
 
   redis:
     image: redis:8

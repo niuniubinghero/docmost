@@ -12,7 +12,7 @@ export async function getGroups(
 
 export async function getGroupById(groupId: string): Promise<IGroup> {
   const req = await api.post<IGroup>("/groups/info", { groupId });
-  return req.data as IGroup;
+  return req.data;
 }
 
 export async function createGroup(data: Partial<IGroup>): Promise<IGroup> {
