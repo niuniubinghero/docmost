@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { AiProvider } from '@docmost/db/repos/ai-provider/ai-provider.repo';
 
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -11,36 +11,157 @@ export interface AiChatOptions {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  provider?: AiProvider;
 }
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
 
-  constructor(private environmentService: EnvironmentService) {}
-
-  private getApiConfig() {
-    return {
-      apiKey: this.environmentService.getOpenAiApiKey(),
-      baseUrl: this.environmentService.getOpenAiApiUrl() || 'https://api.xiaomi.com/mimo',
-      model: this.environmentService.getAiCompletionModel() || 'mimo-7b',
-    };
-  }
-
   async chat(
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): Promise<string> {
-    const config = this.getApiConfig();
+    const provider = options?.provider;
 
-    const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
+    if (!provider) {
+      throw new BadRequestException('No AI provider configured. Please ask an administrator to set up an AI provider.');
+    }
+
+    return this.callProvider(provider, messages, options);
+  }
+
+  async *chatStream(
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): AsyncGenerator<string> {
+    const provider = options?.provider;
+
+    if (!provider) {
+      throw new BadRequestException('No AI provider configured. Please ask an administrator to set up an AI provider.');
+    }
+
+    yield* this.streamProvider(provider, messages, options);
+  }
+
+  async aiSearch(query: string, context: string, provider?: AiProvider): Promise<string> {
+    if (!provider) {
+      throw new BadRequestException('No AI provider configured.');
+    }
+
+    const messages: AiChatMessage[] = [
+      {
+        role: 'system',
+        content: `You are a helpful assistant. Answer the user's question based on the following context:\n\n${context}`,
+      },
+      { role: 'user', content: query },
+    ];
+
+    return this.callProvider(provider, messages);
+  }
+
+  async webSearch(query: string): Promise<Array<{ title: string; url: string; snippet: string }>> {
+    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+
+    try {
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.status}`);
+      }
+
+      const html = await response.text();
+      const results: Array<{ title: string; url: string; snippet: string }> = [];
+
+      const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/g;
+      let match;
+
+      while ((match = resultRegex.exec(html)) !== null && results.length < 5) {
+        const url = match[1];
+        const title = match[2].replace(/<[^>]*>/g, '').trim();
+        const snippet = match[3].replace(/<[^>]*>/g, '').trim();
+
+        if (url && title) {
+          results.push({ title, url, snippet });
+        }
+      }
+
+      return results;
+    } catch (error: any) {
+      this.logger.error(`Web search error: ${error.message}`);
+      return [];
+    }
+  }
+
+  private async callProvider(
+    provider: AiProvider,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): Promise<string> {
+    const baseUrl = provider.baseUrl?.replace(/\/+$/, '');
+
+    if (provider.type === 'claude') {
+      return this.callClaude(provider, baseUrl, messages, options);
+    }
+
+    if (provider.type === 'gemini') {
+      return this.callGemini(provider, baseUrl, messages, options);
+    }
+
+    if (provider.type === 'ollama') {
+      return this.callOllama(provider, baseUrl, messages, options);
+    }
+
+    return this.callOpenAiCompatible(provider, baseUrl, messages, options);
+  }
+
+  private async *streamProvider(
+    provider: AiProvider,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): AsyncGenerator<string> {
+    const baseUrl = provider.baseUrl?.replace(/\/+$/, '');
+
+    if (provider.type === 'claude') {
+      yield* this.streamClaude(provider, baseUrl, messages, options);
+      return;
+    }
+
+    if (provider.type === 'gemini') {
+      yield* this.streamGemini(provider, baseUrl, messages, options);
+      return;
+    }
+
+    if (provider.type === 'ollama') {
+      yield* this.streamOllama(provider, baseUrl, messages, options);
+      return;
+    }
+
+    yield* this.streamOpenAiCompatible(provider, baseUrl, messages, options);
+  }
+
+  private async callOpenAiCompatible(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): Promise<string> {
+    const chatUrl = baseUrl.endsWith('/v1')
+      ? `${baseUrl}/chat/completions`
+      : `${baseUrl}/v1/chat/completions`;
+
+    const response = await fetch(chatUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: options?.model || config.model,
+        model: options?.model || provider.modelName,
         messages,
         temperature: options?.temperature ?? 0.7,
         max_tokens: options?.maxTokens ?? 2048,
@@ -50,28 +171,32 @@ export class AiService {
 
     if (!response.ok) {
       const error = await response.text();
-      this.logger.error(`MiMo API error: ${error}`);
-      throw new Error(`AI request failed: ${response.statusText}`);
+      this.logger.error(`AI API error: ${error}`);
+      throw new BadRequestException(`AI request failed: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.choices[0].message.content;
+    return data.choices[0]?.message?.content || '';
   }
 
-  async *chatStream(
+  private async *streamOpenAiCompatible(
+    provider: AiProvider,
+    baseUrl: string,
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): AsyncGenerator<string> {
-    const config = this.getApiConfig();
+    const chatUrl = baseUrl.endsWith('/v1')
+      ? `${baseUrl}/chat/completions`
+      : `${baseUrl}/v1/chat/completions`;
 
-    const response = await fetch(`${config.baseUrl}/v1/chat/completions`, {
+    const response = await fetch(chatUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model: options?.model || config.model,
+        model: options?.model || provider.modelName,
         messages,
         temperature: options?.temperature ?? 0.7,
         max_tokens: options?.maxTokens ?? 2048,
@@ -81,8 +206,8 @@ export class AiService {
 
     if (!response.ok) {
       const error = await response.text();
-      this.logger.error(`MiMo API error: ${error}`);
-      throw new Error(`AI request failed: ${response.statusText}`);
+      this.logger.error(`AI API error: ${error}`);
+      throw new BadRequestException(`AI request failed: ${response.statusText}`);
     }
 
     const reader = response.body.getReader();
@@ -109,120 +234,205 @@ export class AiService {
               yield content;
             }
           } catch (e) {
-            // Skip invalid JSON lines
+            // Skip invalid JSON
           }
         }
       }
     }
   }
 
-  async improveWriting(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are a professional writing assistant. Improve the writing quality of the text while maintaining its meaning. Fix grammar, spelling, and improve clarity.',
+  private async callClaude(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): Promise<string> {
+    const response = await fetch(`${baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': provider.apiKey || '',
+        'anthropic-version': '2023-06-01',
       },
-      { role: 'user', content: text },
-    ]);
+      body: JSON.stringify({
+        model: provider.modelName,
+        max_tokens: options?.maxTokens ?? 2048,
+        messages: messages.filter((m) => m.role !== 'system'),
+        system: messages.find((m) => m.role === 'system')?.content,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new BadRequestException(`Claude API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    return data.content?.[0]?.text || '';
   }
 
-  async fixSpelling(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are a spelling and grammar checker. Fix all spelling and grammar errors in the text. Return only the corrected text without explanations.',
+  private async *streamClaude(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): AsyncGenerator<string> {
+    const response = await fetch(`${baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': provider.apiKey || '',
+        'anthropic-version': '2023-06-01',
       },
-      { role: 'user', content: text },
-    ]);
+      body: JSON.stringify({
+        model: provider.modelName,
+        max_tokens: options?.maxTokens ?? 2048,
+        messages: messages.filter((m) => m.role !== 'system'),
+        system: messages.find((m) => m.role === 'system')?.content,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new BadRequestException(`Claude API error: ${response.status} - ${error}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'content_block_delta') {
+              yield parsed.delta?.text || '';
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
   }
 
-  async makeShorter(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are a concise writing assistant. Make the text shorter while preserving the key information. Be brief and to the point.',
-      },
-      { role: 'user', content: text },
-    ]);
+  private async callGemini(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): Promise<string> {
+    const url = `${baseUrl}/models/${provider.modelName}:generateContent?key=${provider.apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: messages.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        })),
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new BadRequestException(`Gemini API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
-  async makeLonger(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are an expandable writing assistant. Expand the text with more details and explanations while maintaining the original meaning.',
-      },
-      { role: 'user', content: text },
-    ]);
+  private async *streamGemini(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): AsyncGenerator<string> {
+    const result = await this.callGemini(provider, baseUrl, messages, options);
+    yield result;
   }
 
-  async simplify(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are a simple language assistant. Simplify the text to make it easier to understand. Use simple words and short sentences.',
-      },
-      { role: 'user', content: text },
-    ]);
+  private async callOllama(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): Promise<string> {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: provider.modelName,
+        messages,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new BadRequestException(`Ollama API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    return data.message?.content || '';
   }
 
-  async changeTone(text: string, tone: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: `You are a tone adjustment assistant. Change the tone of the text to be ${tone} while preserving the meaning.`,
-      },
-      { role: 'user', content: text },
-    ]);
-  }
+  private async *streamOllama(
+    provider: AiProvider,
+    baseUrl: string,
+    messages: AiChatMessage[],
+    options?: AiChatOptions,
+  ): AsyncGenerator<string> {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: provider.modelName,
+        messages,
+        stream: true,
+      }),
+    });
 
-  async summarize(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are a summarization assistant. Create a concise summary of the text, capturing the key points.',
-      },
-      { role: 'user', content: text },
-    ]);
-  }
+    if (!response.ok) {
+      const error = await response.text();
+      throw new BadRequestException(`Ollama API error: ${response.status} - ${error}`);
+    }
 
-  async explain(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are an explanation assistant. Explain the text in simple terms, making it easy to understand.',
-      },
-      { role: 'user', content: text },
-    ]);
-  }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-  async translate(text: string, targetLanguage: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: `You are a professional translator. Translate the text to ${targetLanguage}. Maintain the original meaning and tone.`,
-      },
-      { role: 'user', content: text },
-    ]);
-  }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-  async continueWriting(text: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: 'You are a creative writing assistant. Continue the text naturally, maintaining the style and context.',
-      },
-      { role: 'user', content: text },
-    ]);
-  }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-  async aiSearch(query: string, context: string): Promise<string> {
-    return this.chat([
-      {
-        role: 'system',
-        content: `You are a helpful assistant. Answer the user's question based on the following context:\n\n${context}`,
-      },
-      { role: 'user', content: query },
-    ]);
+      for (const line of lines) {
+        if (line) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.message?.content) {
+              yield parsed.message.content;
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+      }
+    }
   }
 }
