@@ -53,6 +53,23 @@
 
 .assistantMessage {
   composes: message;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.assistantIcon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9));
+  color: light-dark(var(--mantine-color-blue-6), var(--mantine-color-blue-4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -32px;
+  margin-top: 2px;
 }
 
 .messageContent {

@@ -58,10 +58,14 @@ export default function AsideChatPanel() {
   });
 
   useEffect(() => {
-    if (page && !chatId) {
-      setContextPages([{ id: page.id, title: page.title || "", slugId: page.slugId }]);
+    if (page) {
+      setContextPages((prev) => {
+        const hasPage = prev.some((p) => p.id === page.id);
+        if (hasPage) return prev;
+        return [{ id: page.id, title: page.title || "", slugId: page.slugId }];
+      });
     }
-  }, [page, chatId]);
+  }, [page]);
 
   const handleRemoveContextPage = useCallback((pageId: string) => {
     setContextPages((prev) => prev.filter((p) => p.id !== pageId));
@@ -124,24 +128,25 @@ export default function AsideChatPanel() {
   const handleSend = useCallback(
     (content: string, mentions: PageMention[], attachments: ChatAttachment[]) => {
       const contextPageId = contextPages.length > 0 ? contextPages[0].id : undefined;
-      sendMessage(content, mentions, attachments, contextPageId);
+      sendMessage(content, mentions, attachments, contextPageId, contextPages);
     },
     [sendMessage, contextPages],
   );
 
   const handleQuickAction = useCallback(
     (prompt: string) => {
-      handleSend(prompt, [], []);
+      const contextPageId = contextPages.length > 0 ? contextPages[0].id : undefined;
+      sendMessage(prompt, [], [], contextPageId, contextPages);
     },
-    [handleSend],
+    [sendMessage, contextPages],
   );
 
   const hasMessages = messages.length > 0 || isStreaming;
 
   const quickActions: QuickAction[] = [
-    { icon: <IconFileText size={16} />, label: t("Summarize this page"), prompt: "Summarize this page" },
-    { icon: <IconLanguage size={16} />, label: t("Translate this page"), prompt: "Translate this page" },
-    { icon: <IconSearch size={16} />, label: t("Analyze for insights"), prompt: "Analyze this page for insights" },
+    { icon: <IconFileText size={16} />, label: t("Summarize this page"), prompt: t("ai.quick_summarize", "Summarize this page") },
+    { icon: <IconLanguage size={16} />, label: t("Translate this page"), prompt: t("ai.quick_translate", "Translate this page") },
+    { icon: <IconSearch size={16} />, label: t("Analyze for insights"), prompt: t("ai.quick_analyze", "Analyze this page for insights") },
   ];
 
   return (
@@ -209,14 +214,16 @@ export default function AsideChatPanel() {
       </div>
 
       {error && (
-        <div
-          style={{
+        <div style={{ padding: "0 var(--mantine-spacing-sm)" }}>
+          <div style={{
             padding: "var(--mantine-spacing-xs) var(--mantine-spacing-sm)",
-            color: "var(--mantine-color-red-6)",
+            color: "var(--mantine-color-gray-6)",
             fontSize: "var(--mantine-font-size-xs)",
-          }}
-        >
-          {error}
+            borderRadius: "var(--mantine-radius-sm)",
+            backgroundColor: "var(--mantine-color-gray-0)",
+          }}>
+            {error}
+          </div>
         </div>
       )}
 

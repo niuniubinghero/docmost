@@ -33,6 +33,7 @@ type Props = {
   variant?: "card" | "flat";
   showDisclaimer?: boolean;
   chatId?: string;
+  defaultValue?: string;
 };
 
 function extractMentions(json: any): PageMention[] {
@@ -100,6 +101,7 @@ export default function ChatInput({
   variant = "card",
   showDisclaimer = true,
   chatId,
+  defaultValue,
 }: Props) {
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
@@ -268,6 +270,14 @@ export default function ChatInput({
       editor.commands.focus();
     }
   }, [editor]);
+
+  // Insert default value when it changes
+  useEffect(() => {
+    if (editor && defaultValue && defaultValue.trim()) {
+      editor.commands.insertContent(defaultValue);
+      editor.commands.focus("end");
+    }
+  }, [defaultValue, editor]);
 
   const hasContent = !isEmpty || pendingAttachments.some((a) => !a.uploading) || (contextPages?.length ?? 0) > 0;
 

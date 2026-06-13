@@ -4,6 +4,7 @@ import {
   IconFilePlus,
   IconEdit,
   IconFileText,
+  IconWorld,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import ChatInput from "./chat-input";
@@ -17,6 +18,11 @@ type Suggestion = {
 };
 
 const SUGGESTIONS: Suggestion[] = [
+  {
+    icon: <IconWorld size={16} />,
+    text: "Search the web",
+    prompt: "Search the web for ",
+  },
   {
     icon: <IconSearch size={16} />,
     text: "Search across all pages",

@@ -59,7 +59,7 @@ export function useChatStream(
   }, []);
 
   const sendMessage = useCallback(
-    (content: string, mentions: PageMention[] = [], attachments: ChatAttachment[] = [], contextPageId?: string) => {
+    (content: string, mentions: PageMention[] = [], attachments: ChatAttachment[] = [], contextPageId?: string, contextPages?: PageMention[]) => {
       if (isStreaming || (!content.trim() && attachments.length === 0)) return;
 
       setError(null);
@@ -78,6 +78,12 @@ export function useChatStream(
           id: a.id,
           fileName: a.fileName,
           fileExt: a.fileExt,
+        }));
+      }
+      if (contextPages && contextPages.length > 0) {
+        metadata.contextPages = contextPages.map((p) => ({
+          id: p.id,
+          title: p.title,
         }));
       }
 

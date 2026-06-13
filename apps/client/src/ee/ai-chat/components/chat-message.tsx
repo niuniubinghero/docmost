@@ -9,6 +9,8 @@ import {
   IconFile,
   IconLoader2,
   IconPhoto,
+  IconFileText,
+  IconSparkles,
 } from "@tabler/icons-react";
 import { markdownToHtml } from "@docmost/editor-ext";
 import { CopyButton } from "@/components/common/copy-button";
@@ -90,6 +92,11 @@ export default function ChatMessage({
         fileName: string;
         fileExt: string;
       }[]) || [];
+    const contextPages =
+      (message.metadata?.contextPages as {
+        id: string;
+        title: string;
+      }[]) || [];
 
     return (
       <div
@@ -98,6 +105,16 @@ export default function ChatMessage({
         aria-label={t("You said:")}
       >
         <div className={classes.userBubble}>
+          {contextPages.length > 0 && (
+            <div className={classes.messageAttachments}>
+              {contextPages.map((page) => (
+                <span key={page.id} className={classes.messageAttachmentChip}>
+                  <IconFileText size={13} />
+                  {page.title || "Untitled"}
+                </span>
+              ))}
+            </div>
+          )}
           {attachments.length > 0 && (
             <div className={classes.messageAttachments}>
               {attachments.map((a) => (
@@ -128,6 +145,9 @@ export default function ChatMessage({
       role="article"
       aria-label={hasAnnouncableContent ? t("Assistant said:") : undefined}
     >
+      <div className={classes.assistantIcon}>
+        <IconSparkles size={16} />
+      </div>
       <div className={classes.messageContent}>
         {toolCalls && toolCalls.length > 0 && (
           <ChatToolGroup toolCalls={toolCalls} isStreaming={isStreaming} />

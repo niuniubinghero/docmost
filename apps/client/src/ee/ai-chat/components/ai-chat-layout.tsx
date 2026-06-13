@@ -74,14 +74,12 @@ export default function AiChatLayout() {
             streamingToolCalls={streamingToolCalls}
           />
           {error && (
-            <div
-              style={{
-                padding: "var(--mantine-spacing-sm) var(--mantine-spacing-lg)",
-                color: "var(--mantine-color-red-6)",
-                fontSize: "var(--mantine-font-size-sm)",
-              }}
-            >
-              {error}
+            <div className={classes.assistantMessage} role="article">
+              <div className={classes.messageContent}>
+                <div style={{ color: "var(--mantine-color-gray-6)", fontSize: "var(--mantine-font-size-sm)" }}>
+                  {error}
+                </div>
+              </div>
             </div>
           )}
           <div className={classes.inputArea}>
