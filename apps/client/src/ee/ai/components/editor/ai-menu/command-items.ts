@@ -20,6 +20,7 @@ import {
 
 interface CommandItem {
   name: string;
+  translationKey: string;
   id: string;
   icon?: typeof IconSparkles;
   action?: AiAction;
@@ -33,54 +34,63 @@ const mainItems: CommandItem[] = [
   {
     id: "improve-writing",
     name: "Improve writing",
+    translationKey: "ai.improve_writing",
     icon: IconSparkles,
     action: AiAction.IMPROVE_WRITING,
   },
   {
     id: "fix-spelling-grammar",
     name: "Fix spelling & grammar",
+    translationKey: "ai.fix_spelling",
     icon: IconCheck,
     action: AiAction.FIX_SPELLING_GRAMMAR,
   },
   {
     id: "make-longer",
     name: "Make longer",
+    translationKey: "ai.make_longer",
     icon: IconTextPlus,
     action: AiAction.MAKE_LONGER,
   },
   {
     id: "make-shorter",
     name: "Make shorter",
+    translationKey: "ai.make_shorter",
     icon: IconAlignJustified,
     action: AiAction.MAKE_SHORTER,
   },
   {
     id: "continue-writing",
     name: "Continue writing",
+    translationKey: "ai.continue_writing",
     icon: IconWriting,
     action: AiAction.CONTINUE_WRITING,
   },
   {
     id: "explain",
     name: "Explain",
+    translationKey: "ai.explain",
     icon: IconHelp,
     action: AiAction.EXPLAIN,
   },
   {
     id: "summarize",
     name: "Summarize",
+    translationKey: "ai.summarize",
     icon: IconList,
     action: AiAction.SUMMARIZE,
   },
   {
     id: "change-tone",
     name: "Change tone",
+    translationKey: "ai.change_tone",
     icon: IconMoodSmile,
     subCommandSet: "tone",
   },
   {
     id: "translate",
     name: "Translate",
+    translationKey: "ai.translate",
     icon: IconLanguage,
     subCommandSet: "translate",
   },
@@ -89,11 +99,13 @@ const toneItems: CommandItem[] = [
   {
     id: "back",
     name: "Back",
+    translationKey: "ai.back",
     icon: IconChevronLeft,
   },
   {
     id: "tone-professional",
     name: "Professional",
+    translationKey: "ai.tone_professional",
     icon: IconMoodSmile,
     action: AiAction.CHANGE_TONE,
     prompt: "Professional",
@@ -101,6 +113,7 @@ const toneItems: CommandItem[] = [
   {
     id: "tone-casual",
     name: "Casual",
+    translationKey: "ai.tone_casual",
     icon: IconMoodSmile,
     action: AiAction.CHANGE_TONE,
     prompt: "Casual",
@@ -108,6 +121,7 @@ const toneItems: CommandItem[] = [
   {
     id: "tone-friendly",
     name: "Friendly",
+    translationKey: "ai.tone_friendly",
     icon: IconMoodSmile,
     action: AiAction.CHANGE_TONE,
     prompt: "Friendly",
@@ -117,11 +131,13 @@ const translateItems: CommandItem[] = [
   {
     id: "back",
     name: "Back",
+    translationKey: "ai.back",
     icon: IconChevronLeft,
   },
   {
     id: "translate-english",
     name: "English",
+    translationKey: "ai.lang_english",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "English",
@@ -129,6 +145,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-spanish",
     name: "Spanish",
+    translationKey: "ai.lang_spanish",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Spanish",
@@ -136,6 +153,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-german",
     name: "German",
+    translationKey: "ai.lang_german",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "German",
@@ -143,6 +161,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-french",
     name: "French",
+    translationKey: "ai.lang_french",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "French",
@@ -150,6 +169,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-dutch",
     name: "Dutch",
+    translationKey: "ai.lang_dutch",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Dutch",
@@ -157,6 +177,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-portuguese",
     name: "Portuguese",
+    translationKey: "ai.lang_portuguese",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Portuguese",
@@ -164,6 +185,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-italian",
     name: "Italian",
+    translationKey: "ai.lang_italian",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Italian",
@@ -171,6 +193,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-japanese",
     name: "Japanese",
+    translationKey: "ai.lang_japanese",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Japanese",
@@ -178,6 +201,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-korean",
     name: "Korean",
+    translationKey: "ai.lang_korean",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Korean",
@@ -185,6 +209,7 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-swedish",
     name: "Swedish",
+    translationKey: "ai.lang_swedish",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Swedish",
@@ -192,19 +217,21 @@ const translateItems: CommandItem[] = [
   {
     id: "translate-chinese",
     name: "Chinese (Simplified)",
+    translationKey: "ai.lang_chinese",
     icon: IconLanguage,
     action: AiAction.TRANSLATE,
     prompt: "Simplified Chinese",
   },
 ];
 const resultItems: CommandItem[] = [
-  { id: "result-replace", name: "Replace", icon: IconCheck },
-  { id: "result-insert-below", name: "Insert below", icon: IconArrowDownLeft },
-  { id: "result-copy", name: "Copy", icon: IconCopy },
-  { id: "result-discard", name: "Discard", icon: IconTrash },
+  { id: "result-replace", name: "Replace", translationKey: "ai.result_replace", icon: IconCheck },
+  { id: "result-insert-below", name: "Insert below", translationKey: "ai.result_insert_below", icon: IconArrowDownLeft },
+  { id: "result-copy", name: "Copy", translationKey: "ai.result_copy", icon: IconCopy },
+  { id: "result-discard", name: "Discard", translationKey: "ai.result_discard", icon: IconTrash },
   {
     id: "result-try-again",
     name: "Try again",
+    translationKey: "ai.result_try_again",
     icon: IconRefresh,
   },
 ];

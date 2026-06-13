@@ -4,6 +4,7 @@ import { useDebouncedCallback, useMediaQuery } from "@mantine/hooks";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAtom } from "jotai";
+import { useTranslation } from "react-i18next";
 import { IconArrowUp } from "@tabler/icons-react";
 import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { useAiGenerateStreamMutation } from "@/ee/ai/queries/ai-query.ts";
@@ -22,6 +23,7 @@ interface EditorAiMenuProps {
 }
 
 const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
+  const { t } = useTranslation();
   const aiGenerateStreamMutation = useAiGenerateStreamMutation();
   const location = useLocation();
   const isSmBreakpoint = useMediaQuery("(max-width: 48em)");
@@ -105,6 +107,7 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
         command = {
           id: "custom",
           name: "Custom",
+          translationKey: "ai.custom",
           action: AiAction.CUSTOM,
           prompt,
         };
@@ -320,7 +323,7 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
           <TextInput
             ref={inputRef}
             className={classes.aiInput}
-            placeholder="Ask AI..."
+            placeholder={t("ai.ask", "Ask AI...")}
             data-autofocus
             value={prompt}
             disabled={isLoading}
