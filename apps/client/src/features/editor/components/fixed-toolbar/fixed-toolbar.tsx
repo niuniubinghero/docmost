@@ -43,12 +43,12 @@ export const FixedToolbar: FC<FixedToolbarProps> = ({
         onMouseDown={(e) => e.preventDefault()}
       >
         <div className={classes.inner}>
-          {/* {isGenerativeAiEnabled && (
+          {isGenerativeAiEnabled && (
             <>
               <AskAiGroup />
               <div className={classes.divider} />
             </>
-          )} */}
+          )}
           <BlockTypeGroup editor={editor} />
           <div className={classes.divider} />
           <InlineMarksGroup editor={editor} state={state} />

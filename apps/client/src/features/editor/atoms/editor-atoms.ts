@@ -17,3 +17,6 @@ export const showLinkMenuAtom = atom(false);
 // Current page's edit mode — initialized from the user's saved preference on
 // first load, can be toggled locally without persisting to the server.
 export const currentPageEditModeAtom = atom<PageEditMode>(PageEditMode.Edit);
+
+// Selected text to send to AI chat
+export const selectedTextForAiAtom = atom<string>("");
