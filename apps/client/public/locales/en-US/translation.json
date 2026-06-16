@@ -1085,5 +1085,18 @@
   "Added {{name}} to favorites": "Added {{name}} to favorites",
   "Removed {{name}} from favorites": "Removed {{name}} from favorites",
   "Page menu for {{name}}": "Page menu for {{name}}",
-  "Create subpage of {{name}}": "Create subpage of {{name}}"
+  "Create subpage of {{name}}": "Create subpage of {{name}}",
+  "Good morning": "Good morning",
+  "Good afternoon": "Good afternoon",
+  "Good evening": "Good evening",
+  "how can I help you today?": "how can I help you today?",
+  "Press": "Press",
+  "to open AI menu": "to open AI menu",
+  "Recent conversations": "Recent conversations",
+  "Search the web": "Search the web",
+  "Search across all pages": "Search across all pages",
+  "Create a new page": "Create a new page",
+  "Summarize a page": "Summarize a page",
+  "Update page content": "Update page content",
+  "Drop files here": "Drop files here"
 }

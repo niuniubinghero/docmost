@@ -1126,5 +1126,18 @@
   "ai.quick_analyze": "分析这个页面获取洞察",
   "Summarize this page": "总结此页面",
   "Translate this page": "翻译此页面",
-  "Analyze for insights": "分析并获取洞察"
+  "Analyze for insights": "分析并获取洞察",
+  "Good morning": "早上好",
+  "Good afternoon": "下午好",
+  "Good evening": "晚上好",
+  "how can I help you today?": "今天我能帮您做什么？",
+  "Press": "按下",
+  "to open AI menu": "打开 AI 菜单",
+  "Recent conversations": "最近对话",
+  "Search the web": "搜索网页",
+  "Search across all pages": "搜索所有页面",
+  "Create a new page": "创建新页面",
+  "Summarize a page": "总结页面",
+  "Update page content": "更新页面内容",
+  "Drop files here": "拖放文件到这里"
 }
