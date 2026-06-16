@@ -15,7 +15,7 @@
     "server:dev": "nx run server:start:dev",
     "server:start": "nx run server:start:prod",
     "email:dev": "nx run server:email:dev",
-    "dev": "pnpm concurrently -n \"frontend,backend\" -c \"cyan,green\" \"pnpm run client:dev\" \"pnpm run server:dev\"",
+    "dev": "cross-env NO_COLOR=1 FORCE_COLOR=0 pnpm concurrently -n \"frontend,backend\" --no-color \"pnpm run client:dev\" \"pnpm run server:dev\"",
     "clean": "rm -rf apps/*/dist packages/*/dist apps/client/node_modules/.vite"
   },
   "dependencies": {
