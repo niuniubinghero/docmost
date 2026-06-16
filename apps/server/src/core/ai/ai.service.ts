@@ -1,9 +1,12 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { AiProvider } from '@docmost/db/repos/ai-provider/ai-provider.repo';
+import type { AiToolDefinition, AiToolCall } from './ai-tools';
 
 export interface AiChatMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  tool_call_id?: string;
+  tool_calls?: AiToolCall[];
 }
 
 export interface AiChatOptions {
@@ -12,11 +15,38 @@ export interface AiChatOptions {
   maxTokens?: number;
   stream?: boolean;
   provider?: AiProvider;
+  timeoutMs?: number;
+  tools?: AiToolDefinition[];
+}
+
+export interface AiStreamChunk {
+  type: 'content' | 'tool_call';
+  content?: string;
+  toolCall?: AiToolCall;
 }
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new BadRequestException(`AI request timed out after ${ms}ms`));
+      }, ms);
+
+      promise.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
+  }
 
   async chat(
     messages: AiChatMessage[],
@@ -34,14 +64,27 @@ export class AiService {
   async *chatStream(
     messages: AiChatMessage[],
     options?: AiChatOptions,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<AiStreamChunk> {
     const provider = options?.provider;
 
     if (!provider) {
       throw new BadRequestException('No AI provider configured. Please ask an administrator to set up an AI provider.');
     }
 
-    yield* this.streamProvider(provider, messages, options);
+    const timeoutMs = options?.timeoutMs ?? 120000;
+    const startTime = Date.now();
+
+    try {
+      for await (const chunk of this.streamProvider(provider, messages, options)) {
+        if (Date.now() - startTime > timeoutMs) {
+          throw new BadRequestException(`AI streaming timed out after ${timeoutMs}ms`);
+        }
+        yield chunk;
+      }
+    } catch (error: any) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(`AI streaming error: ${error.message || 'Unknown error'}`);
+    }
   }
 
   async aiSearch(query: string, context: string, provider?: AiProvider): Promise<string> {
@@ -123,7 +166,7 @@ export class AiService {
     provider: AiProvider,
     messages: AiChatMessage[],
     options?: AiChatOptions,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<AiStreamChunk> {
     const baseUrl = provider.baseUrl?.replace(/\/+$/, '');
 
     if (provider.type === 'claude') {
@@ -184,60 +227,135 @@ export class AiService {
     baseUrl: string,
     messages: AiChatMessage[],
     options?: AiChatOptions,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<AiStreamChunk> {
     const chatUrl = baseUrl.endsWith('/v1')
       ? `${baseUrl}/chat/completions`
       : `${baseUrl}/v1/chat/completions`;
 
-    const response = await fetch(chatUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: options?.model || provider.modelName,
-        messages,
-        temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
+    const timeoutMs = options?.timeoutMs ?? 120000;
+
+    const body: any = {
+      model: options?.model || provider.modelName,
+      messages,
+      temperature: options?.temperature ?? 0.7,
+      max_tokens: options?.maxTokens ?? 4096,
+      stream: true,
+    };
+
+    if (options?.tools?.length) {
+      body.tools = options.tools;
+      body.tool_choice = 'auto';
+    }
+
+    const response = await this.withTimeout(
+      fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+        },
+        body: JSON.stringify(body),
       }),
-    });
+      10000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
       this.logger.error(`AI API error: ${error}`);
-      throw new BadRequestException(`AI request failed: ${response.statusText}`);
+
+      let errorMessage = `AI request failed: ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(error);
+        if (errorJson.error?.message) {
+          errorMessage = errorJson.error.message;
+        } else if (errorJson.message) {
+          errorMessage = errorJson.message;
+        }
+      } catch (e) {
+        // Use default error message
+      }
+
+      throw new BadRequestException(errorMessage);
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const startTime = Date.now();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // Accumulate tool calls from streaming deltas
+    const toolCallAccumulator: Map<number, { id: string; name: string; arguments: string }> = new Map();
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    try {
+      while (true) {
+        if (Date.now() - startTime > timeoutMs) {
+          throw new BadRequestException(`AI streaming timed out after ${timeoutMs}ms`);
+        }
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') return;
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices[0]?.delta?.content;
-            if (content) {
-              yield content;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              // Yield accumulated tool calls
+              for (const [, tc] of toolCallAccumulator) {
+                yield {
+                  type: 'tool_call',
+                  toolCall: { id: tc.id, name: tc.name, arguments: tc.arguments },
+                };
+              }
+              return;
             }
-          } catch (e) {
-            // Skip invalid JSON
+
+            try {
+              const parsed = JSON.parse(data);
+
+              if (parsed.error) {
+                throw new BadRequestException(parsed.error.message || 'Stream error');
+              }
+
+              const choice = parsed.choices?.[0];
+              if (!choice) continue;
+
+              // Handle content delta
+              const content = choice.delta?.content;
+              if (content) {
+                yield { type: 'content', content };
+              }
+
+              // Handle tool call deltas
+              const toolCalls = choice.delta?.tool_calls;
+              if (toolCalls) {
+                for (const tc of toolCalls) {
+                  const idx = tc.index ?? 0;
+                  if (!toolCallAccumulator.has(idx)) {
+                    toolCallAccumulator.set(idx, {
+                      id: tc.id || '',
+                      name: tc.function?.name || '',
+                      arguments: '',
+                    });
+                  }
+                  const acc = toolCallAccumulator.get(idx)!;
+                  if (tc.id) acc.id = tc.id;
+                  if (tc.function?.name) acc.name = tc.function.name;
+                  if (tc.function?.arguments) acc.arguments += tc.function.arguments;
+                }
+              }
+            } catch (e) {
+              if (e instanceof BadRequestException) throw e;
+              // Skip invalid JSON
+            }
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
 
@@ -276,7 +394,7 @@ export class AiService {
     baseUrl: string,
     messages: AiChatMessage[],
     options?: AiChatOptions,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<AiStreamChunk> {
     const response = await fetch(`${baseUrl}/messages`, {
       method: 'POST',
       headers: {
@@ -286,10 +404,15 @@ export class AiService {
       },
       body: JSON.stringify({
         model: provider.modelName,
-        max_tokens: options?.maxTokens ?? 2048,
+        max_tokens: options?.maxTokens ?? 4096,
         messages: messages.filter((m) => m.role !== 'system'),
         system: messages.find((m) => m.role === 'system')?.content,
         stream: true,
+        ...(options?.tools?.length ? { tools: options.tools.map(t => ({
+          name: t.function.name,
+          description: t.function.description,
+          input_schema: t.function.parameters,
+        })) } : {}),
       }),
     });
 
@@ -316,7 +439,7 @@ export class AiService {
           try {
             const parsed = JSON.parse(data);
             if (parsed.type === 'content_block_delta') {
-              yield parsed.delta?.text || '';
+              yield { type: 'content', content: parsed.delta?.text || '' };
             }
           } catch (e) {
             // Skip invalid JSON
@@ -358,9 +481,96 @@ export class AiService {
     baseUrl: string,
     messages: AiChatMessage[],
     options?: AiChatOptions,
-  ): AsyncGenerator<string> {
-    const result = await this.callGemini(provider, baseUrl, messages, options);
-    yield result;
+  ): AsyncGenerator<AiStreamChunk> {
+    const url = `${baseUrl}/models/${provider.modelName}:streamGenerateContent?key=${provider.apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: messages.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        })),
+        generationConfig: {
+          maxOutputTokens: options?.maxTokens ?? 2048,
+          temperature: options?.temperature ?? 0.7,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new BadRequestException(`Gemini API error: ${response.status} - ${error}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Gemini streaming returns JSON array chunks
+      // Try to parse complete JSON objects from the buffer
+      let jsonStartIndex = buffer.indexOf('{');
+      if (jsonStartIndex === -1) {
+        jsonStartIndex = buffer.indexOf('[');
+      }
+
+      if (jsonStartIndex >= 0) {
+        // Find the matching closing bracket
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        const startChar = buffer[jsonStartIndex];
+        const endChar = startChar === '{' ? '}' : ']';
+
+        for (let i = jsonStartIndex; i < buffer.length; i++) {
+          const char = buffer[i];
+
+          if (escape) {
+            escape = false;
+            continue;
+          }
+
+          if (char === '\\') {
+            escape = true;
+            continue;
+          }
+
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+
+          if (inString) continue;
+
+          if (char === startChar) depth++;
+          else if (char === endChar) {
+            depth--;
+            if (depth === 0) {
+              const jsonStr = buffer.substring(jsonStartIndex, i + 1);
+              try {
+                const parsed = JSON.parse(jsonStr);
+                // Handle both single object and array responses
+                const candidates = Array.isArray(parsed) ? parsed : [parsed];
+                for (const candidate of candidates) {
+                  const text = candidate.candidates?.[0]?.content?.parts?.[0]?.text;
+                  if (text) yield { type: 'content', content: text };
+                }
+              } catch (e) {
+                // Skip invalid JSON
+              }
+              buffer = buffer.substring(i + 1);
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   private async callOllama(
@@ -393,7 +603,7 @@ export class AiService {
     baseUrl: string,
     messages: AiChatMessage[],
     options?: AiChatOptions,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<AiStreamChunk> {
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -426,7 +636,7 @@ export class AiService {
           try {
             const parsed = JSON.parse(line);
             if (parsed.message?.content) {
-              yield parsed.message.content;
+              yield { type: 'content', content: parsed.message.content };
             }
           } catch (e) {
             // Skip invalid JSON
