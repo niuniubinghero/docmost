@@ -59,7 +59,7 @@ export function useChatStream(
   }, []);
 
   const sendMessage = useCallback(
-    (content: string, mentions: PageMention[] = [], attachments: ChatAttachment[] = [], contextPageId?: string, contextPages?: PageMention[]) => {
+    (content: string, mentions: PageMention[] = [], attachments: ChatAttachment[] = [], contextPageId?: string, contextPages?: PageMention[], selectedText?: string) => {
       if (isStreaming || (!content.trim() && attachments.length === 0)) return;
 
       setError(null);
@@ -86,6 +86,9 @@ export function useChatStream(
           title: p.title,
         }));
       }
+      if (selectedText) {
+        metadata.selectedText = selectedText;
+      }
 
       const userMessage: AiChatMessage = {
         id: `temp-${Date.now()}`,
@@ -108,6 +111,7 @@ export function useChatStream(
           mentionedPageIds: mentions.map((m) => m.id),
           ...(contextPageId && { contextPageId }),
           ...(attachmentIds.length && { attachmentIds }),
+          ...(selectedText && { selectedText }),
         },
         (event: AiChatStreamEvent) => {
           switch (event.type) {

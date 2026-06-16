@@ -36,7 +36,7 @@ export default function Aside() {
       title = "Table of contents";
       break;
     case "chat":
-      component = <AsideChatPanel />;
+      component = <AsideChatPanel editor={pageEditor} />;
       title = "AI Chat";
       break;
     case "details":

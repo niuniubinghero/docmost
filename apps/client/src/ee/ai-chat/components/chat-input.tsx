@@ -1,6 +1,6 @@
 import { useCallback, useId, useRef, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { IconArrowUp, IconPaperclip, IconPlayerStopFilled, IconX, IconFile, IconPhoto, IconPlus, IconAt, IconFileText } from "@tabler/icons-react";
+import { IconArrowUp, IconPaperclip, IconPlayerStopFilled, IconX, IconFile, IconPhoto, IconPlus, IconAt, IconFileText, IconSelectAll } from "@tabler/icons-react";
 import { Popover } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
@@ -8,6 +8,8 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { CharacterCount } from "@tiptap/extensions";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Mention, LinkExtension } from "@docmost/editor-ext";
+import { useAtomValue } from "jotai";
+import { editorSelectionAtom } from "@/features/editor/atoms/editor-atoms";
 import EmojiCommand from "@/features/editor/extensions/emoji-command";
 import mentionRenderItems from "@/features/editor/components/mention/mention-suggestion";
 import MentionView from "@/features/editor/components/mention/mention-view";
@@ -106,6 +108,7 @@ export default function ChatInput({
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
   const { t } = useTranslation();
+  const editorSelection = useAtomValue(editorSelectionAtom);
   const [isEmpty, setIsEmpty] = useState(true);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -319,6 +322,11 @@ export default function ChatInput({
   }, [defaultValue, editor]);
 
   const hasContent = !isEmpty || pendingAttachments.some((a) => !a.uploading) || (contextPages?.length ?? 0) > 0;
+  const selectionPreview = editorSelection?.text
+    ? editorSelection.text.length > 80
+      ? editorSelection.text.substring(0, 80) + "..."
+      : editorSelection.text
+    : null;
 
   const wrapperClass = variant === "flat" ? classes.inputWrapperFlat : classes.inputWrapper;
 
@@ -349,8 +357,16 @@ export default function ChatInput({
         onChange={(e) => handleFileSelect(e.target.files)}
       />
 
-      {((contextPages?.length ?? 0) > 0 || pendingAttachments.length > 0) && (
+      {((contextPages?.length ?? 0) > 0 || pendingAttachments.length > 0 || selectionPreview) && (
         <div className={classes.attachmentChips}>
+          {selectionPreview && (
+            <div className={classes.attachmentChip} title={editorSelection?.text}>
+              <IconSelectAll size={14} />
+              <span className={classes.attachmentChipName}>
+                {t("Selected")}: {selectionPreview}
+              </span>
+            </div>
+          )}
           {contextPages?.map((page) => (
             <div key={page.id} className={classes.attachmentChip}>
               <IconFileText size={14} />

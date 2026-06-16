@@ -16,6 +16,7 @@ import {
   IconCopy,
   IconTextPlus,
   IconAlignJustified,
+  IconMessage,
 } from "@tabler/icons-react";
 
 interface CommandItem {
@@ -321,6 +322,12 @@ const resultItems: CommandItem[] = [
     name: "Try again",
     translationKey: "ai.result_try_again",
     icon: IconRefresh,
+  },
+  {
+    id: "result-continue-in-chat",
+    name: "Continue in chat",
+    translationKey: "ai.result_continue_in_chat",
+    icon: IconMessage,
   },
 ];
 const commandItems: Record<CommandSet, CommandItem[]> = {

@@ -97,7 +97,7 @@ export default function GlobalAppShell({
       }}
       aside={
         isPageRoute && {
-          width: 450,
+          width: 520,
           breakpoint: "sm",
           collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
         }

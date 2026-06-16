@@ -7,6 +7,7 @@ import { useAtom } from "jotai";
 import { useTranslation } from "react-i18next";
 import { IconArrowUp, IconPlayerStop } from "@tabler/icons-react";
 import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms.ts";
+import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom";
 import { useAiGenerateStreamMutation } from "@/ee/ai/queries/ai-query.ts";
 import { AiAction } from "@/ee/ai/types/ai.types.ts";
 import { CommandItem, commandItems, CommandSet } from "./command-items.ts";
@@ -28,6 +29,7 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
   const location = useLocation();
   const isSmBreakpoint = useMediaQuery("(max-width: 48em)");
   const [showAiMenu, setShowAiMenu] = useAtom(showAiMenuAtom);
+  const [, setAsideState] = useAtom(asideStateAtom);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -223,6 +225,12 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
       }
       if (item.id === "result-try-again" && lastAction) {
         return handleGenerate(lastAction);
+      }
+      if (item.id === "result-continue-in-chat") {
+        // Open aside chat panel with the current context
+        setAsideState({ tab: "chat", isAsideOpen: true });
+        setShowAiMenu(false);
+        return;
       }
       if (item.subCommandSet) {
         return setActiveCommandSet(item.subCommandSet);

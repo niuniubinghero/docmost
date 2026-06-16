@@ -17,9 +17,19 @@ import { AiProviderRepo } from '@docmost/db/repos/ai-provider/ai-provider.repo';
 import { AiChatRepo } from '@docmost/db/repos/ai-chat/ai-chat.repo';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { AiToolExecutor } from '../ai/ai-tool-executor';
+import { AI_TOOLS } from '../ai/ai-tools';
 import { FastifyReply } from 'fastify';
 
 const MAX_TOOL_ROUNDS = 5;
+
+// Providers that support native tool_calls API
+const NATIVE_TOOL_CALL_PROVIDERS = new Set([
+  'openai', 'deepseek', 'kimi', 'qwen', 'claude', 'claude-compat', 'mimo',
+]);
+
+function supportsNativeToolCalls(providerType: string): boolean {
+  return NATIVE_TOOL_CALL_PROVIDERS.has(providerType);
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai/chats')
@@ -131,6 +141,7 @@ export class AiChatController {
       mentionedPageIds?: string[];
       contextPageId?: string;
       attachmentIds?: string[];
+      selectedText?: string;
     },
     @Res() res: FastifyReply,
     @AuthUser() user: User,
@@ -191,6 +202,12 @@ export class AiChatController {
         } catch (e) {
           // Page not found, skip context
         }
+      }
+
+      // Add selected text context if provided
+      if (body.selectedText) {
+        const selectedText = body.selectedText.substring(0, 4000);
+        contextPrompt += `\n\n[User's selected text in editor]:\n${selectedText}\n[End of selection]`;
       }
 
       const userMessage = contextPrompt
@@ -282,42 +299,65 @@ Then after getting results, output another tool block with the page ID.`,
 
       let fullContent = '';
       const allToolCalls: any[] = [];
-      let lastRoundContent = '';
+      const useNativeTools = supportsNativeToolCalls(provider.type);
 
-      // Tool calling loop (prompt-based)
+      // Tool calling loop
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        // Don't pass tools to API - we handle it via prompt
-        const stream = this.aiService.chatStream(messages, { provider });
         let roundContent = '';
+        const nativeToolCalls: { id: string; name: string; arguments: string }[] = [];
+
+        // Stream AI response, passing tools for native tool_call providers
+        const streamOptions: any = { provider };
+        if (useNativeTools) {
+          streamOptions.tools = AI_TOOLS;
+        }
+
+        const stream = this.aiService.chatStream(messages, streamOptions);
 
         for await (const chunk of stream) {
           if (chunk.type === 'content') {
             roundContent += chunk.content;
             sendEvent({ type: 'content', text: chunk.content });
+          } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+            // Native tool call from provider API
+            nativeToolCalls.push(chunk.toolCall);
           }
         }
 
-        lastRoundContent = roundContent;
+        // Collect tool calls: native or prompt-based fallback
+        const toolCallsToExecute: { action: string; params: Record<string, any> }[] = [];
 
-        // Parse tool blocks from the response (```tool ... ```)
-        const toolCallRegex = /```tool\n([\s\S]*?)```/g;
-        const toolCalls: { action: string; params: Record<string, any> }[] = [];
-        let match;
-
-        while ((match = toolCallRegex.exec(roundContent)) !== null) {
-          try {
-            const parsed = JSON.parse(match[1]);
-            if (parsed.action && parsed.params) {
-              toolCalls.push(parsed);
+        if (nativeToolCalls.length > 0) {
+          // Native tool calls from the API
+          for (const tc of nativeToolCalls) {
+            try {
+              toolCallsToExecute.push({
+                action: tc.name,
+                params: JSON.parse(tc.arguments),
+              });
+            } catch (e) {
+              process.stderr.write(`[AI-TOOL] Failed to parse native tool arguments: ${tc.arguments}\n`);
             }
-          } catch (e) {
-            process.stderr.write(`[AI-TOOL] Failed to parse tool block: ${match[1]}\n`);
+          }
+        } else if (!useNativeTools && roundContent) {
+          // Prompt-based fallback: parse ```tool ... ``` blocks
+          const toolCallRegex = /```tool\n([\s\S]*?)```/g;
+          let match;
+          while ((match = toolCallRegex.exec(roundContent)) !== null) {
+            try {
+              const parsed = JSON.parse(match[1]);
+              if (parsed.action && parsed.params) {
+                toolCallsToExecute.push(parsed);
+              }
+            } catch (e) {
+              process.stderr.write(`[AI-TOOL] Failed to parse tool block: ${match[1]}\n`);
+            }
           }
         }
 
-        process.stderr.write(`[AI-TOOL] Round ${round}: found ${toolCalls.length} tool calls\n`);
+        process.stderr.write(`[AI-TOOL] Round ${round}: found ${toolCallsToExecute.length} tool calls (native: ${useNativeTools})\n`);
 
-        if (toolCalls.length === 0) {
+        if (toolCallsToExecute.length === 0) {
           // No tool calls found, we're done
           fullContent = roundContent;
           break;
@@ -325,7 +365,7 @@ Then after getting results, output another tool block with the page ID.`,
 
         // Execute each tool call
         const toolResults: string[] = [];
-        for (const tc of toolCalls) {
+        for (const tc of toolCallsToExecute) {
           const toolCallId = `tc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
           sendEvent({ type: 'tool_call', id: toolCallId, name: tc.action, args: tc.params });
 
@@ -356,7 +396,7 @@ Then after getting results, output another tool block with the page ID.`,
         // Add assistant message with tool calls to history
         messages.push({
           role: 'assistant',
-          content: roundContent,
+          content: roundContent || `Tool calls: ${toolCallsToExecute.map(tc => tc.action).join(', ')}`,
         });
 
         // Add tool results as user message so AI can continue
@@ -381,22 +421,6 @@ Then after getting results, output another tool block with the page ID.`,
           workspace.id,
           body.content,
         ).catch(() => {});
-      }
-
-      // Auto-write to page when context page exists
-      if (body.contextPageId && fullContent) {
-        try {
-          await this.aiToolExecutor.executeTool(
-            'update_page_content',
-            { page_id: body.contextPageId, content: fullContent, operation: 'append' },
-            user,
-            workspace.id,
-          );
-          sendEvent({ type: 'page_updated', pageId: body.contextPageId });
-          process.stderr.write(`[AI-CHAT] Auto-wrote to page ${body.contextPageId}\n`);
-        } catch (e: any) {
-          process.stderr.write(`[AI-CHAT] Auto-write failed: ${e.message}\n`);
-        }
       }
 
       sendEvent({

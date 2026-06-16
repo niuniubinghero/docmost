@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import DOMPurify from "dompurify";
@@ -13,11 +13,15 @@ import {
   IconRefresh,
   IconEdit,
   IconDots,
+  IconArrowDown,
+  IconArrowUp,
+  IconReplace,
 } from "@tabler/icons-react";
 import { markdownToHtml } from "@docmost/editor-ext";
 import { CopyButton } from "@/components/common/copy-button";
 import type { AiChatMessage, AiChatToolCall } from "../types/ai-chat.types";
 import ChatToolGroup from "./chat-tool-group";
+import { useApplyToEditor, type ApplyOperation } from "../hooks/use-apply-to-editor";
 import classes from "../styles/chat-message.module.css";
 import CopyTextButton from "@/components/common/copy.tsx";
 
@@ -62,6 +66,8 @@ export default function ChatMessage({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
+  const { canApply, hasSelection, applyToEditor } = useApplyToEditor();
+  const [applied, setApplied] = useState(false);
 
   // Process code blocks for syntax highlighting and copy buttons
   useEffect(() => {
@@ -101,23 +107,14 @@ export default function ChatMessage({
 
         // Add wrapper and copy button
         const wrapper = document.createElement("div");
-        wrapper.className = "code-block-wrapper";
-        wrapper.style.cssText = "position:relative;margin:12px 0;border-radius:8px;overflow:hidden;background:light-dark(var(--mantine-color-gray-0),var(--mantine-color-dark-6));border:1px solid light-dark(var(--mantine-color-gray-2),var(--mantine-color-dark-4))";
+        wrapper.className = classes.codeBlockWrapper;
 
         const header = document.createElement("div");
-        header.style.cssText = "display:flex;align-items:center;justify-content:flex-end;padding:4px 8px;background:light-dark(var(--mantine-color-gray-1),var(--mantine-color-dark-5));border-bottom:1px solid light-dark(var(--mantine-color-gray-2),var(--mantine-color-dark-4))";
+        header.className = classes.codeBlockHeader;
 
         const copyBtn = document.createElement("button");
+        copyBtn.className = classes.codeBlockCopyBtn;
         copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
-        copyBtn.style.cssText = "display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:4px;background:transparent;cursor:pointer;color:var(--mantine-color-dimmed);transition:background 150ms,color 150ms";
-        copyBtn.onmouseenter = () => {
-          copyBtn.style.background = "light-dark(var(--mantine-color-gray-2),var(--mantine-color-dark-4))";
-          copyBtn.style.color = "light-dark(var(--mantine-color-gray-7),var(--mantine-color-dark-2))";
-        };
-        copyBtn.onmouseleave = () => {
-          copyBtn.style.background = "transparent";
-          copyBtn.style.color = "var(--mantine-color-dimmed)";
-        };
         copyBtn.onclick = async () => {
           await navigator.clipboard.writeText(codeEl.textContent || "");
           copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -139,6 +136,22 @@ export default function ChatMessage({
     processCodeBlocks();
   }, [message.content, streamingContent]);
 
+  // Wrap tables in scrollable container
+  useEffect(() => {
+    if (!contentRef.current) return;
+
+    const tables = contentRef.current.querySelectorAll("table");
+    tables.forEach((table) => {
+      if (table.getAttribute("data-wrapped")) return;
+      table.setAttribute("data-wrapped", "true");
+
+      const wrapper = document.createElement("div");
+      wrapper.className = classes.tableWrapper;
+      table.parentNode?.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  }, [message.content, streamingContent]);
+
   const handleContentClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
@@ -152,6 +165,18 @@ export default function ChatMessage({
       }
     },
     [navigate],
+  );
+
+  const handleApply = useCallback(
+    (operation?: ApplyOperation) => {
+      if (!message.content) return;
+      const success = applyToEditor(message.content, operation);
+      if (success) {
+        setApplied(true);
+        setTimeout(() => setApplied(false), 2000);
+      }
+    },
+    [message.content, applyToEditor],
   );
 
   if (message.role === "tool") return null;
@@ -225,7 +250,7 @@ export default function ChatMessage({
       aria-label={hasAnnouncableContent ? t("Assistant said:") : undefined}
     >
       <div className={classes.assistantIcon}>
-        <IconSparkles size={16} />
+        <IconSparkles size={14} />
       </div>
       <div className={classes.messageContent}>
         {toolCalls && toolCalls.length > 0 && (
@@ -252,7 +277,7 @@ export default function ChatMessage({
                   <span className={classes.thinkingDot} />
                   <span className={classes.thinkingDot} />
                 </span>
-                Thinking...
+                {t("ai.thinking", "Thinking...")}
               </span>
             )}
             {content && <span className={classes.streamingCursor} />}
@@ -284,18 +309,47 @@ export default function ChatMessage({
                 <IconRefresh size={14} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label={t("Insert to editor")}>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                onClick={() => {
-                  // TODO: Implement insert to editor functionality
-                }}
-              >
-                <IconEdit size={14} />
-              </ActionIcon>
-            </Tooltip>
+            {canApply && (
+              <Menu withinPortal position="bottom-start" withArrow>
+                <Menu.Target>
+                  <Tooltip label={t("Apply to editor")}>
+                    <ActionIcon
+                      variant="subtle"
+                      color={applied ? "green" : "gray"}
+                      size="sm"
+                    >
+                      {applied ? (
+                        <IconCheck size={14} />
+                      ) : (
+                        <IconEdit size={14} />
+                      )}
+                    </ActionIcon>
+                  </Tooltip>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {hasSelection && (
+                    <Menu.Item
+                      leftSection={<IconReplace size={14} />}
+                      onClick={() => handleApply("replace_selection")}
+                    >
+                      {t("Replace selection")}
+                    </Menu.Item>
+                  )}
+                  <Menu.Item
+                    leftSection={<IconArrowDown size={14} />}
+                    onClick={() => handleApply("append")}
+                  >
+                    {t("Append to page")}
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconArrowUp size={14} />}
+                    onClick={() => handleApply("prepend")}
+                  >
+                    {t("Prepend to page")}
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            )}
           </div>
         )}
       </div>

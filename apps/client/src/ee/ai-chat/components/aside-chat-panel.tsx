@@ -10,10 +10,12 @@ import {
   IconLanguage,
   IconSearch,
 } from "@tabler/icons-react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { Editor } from "@tiptap/core";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom";
+import { editorSelectionAtom } from "@/features/editor/atoms/editor-atoms";
 import { usePageQuery } from "@/features/page/queries/page-query";
 import { extractPageSlugId } from "@/lib";
 import { useChatStream } from "../hooks/use-chat-stream";
@@ -30,10 +32,15 @@ type QuickAction = {
   prompt: string;
 };
 
-export default function AsideChatPanel() {
+interface AsideChatPanelProps {
+  editor?: Editor | null;
+}
+
+export default function AsideChatPanel({ editor }: AsideChatPanelProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [, setAsideState] = useAtom(asideStateAtom);
+  const editorSelection = useAtomValue(editorSelectionAtom);
   const [chatId, setChatId] = useState<string | undefined>(undefined);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [contextPages, setContextPages] = useState<PageMention[]>([]);
@@ -128,9 +135,11 @@ export default function AsideChatPanel() {
   const handleSend = useCallback(
     (content: string, mentions: PageMention[], attachments: ChatAttachment[]) => {
       const contextPageId = contextPages.length > 0 ? contextPages[0].id : undefined;
-      sendMessage(content, mentions, attachments, contextPageId, contextPages);
+      // Include selected text from editor as context
+      const selectionText = editorSelection?.text;
+      sendMessage(content, mentions, attachments, contextPageId, contextPages, selectionText);
     },
-    [sendMessage, contextPages],
+    [sendMessage, contextPages, editorSelection],
   );
 
   const handleQuickAction = useCallback(
@@ -214,14 +223,8 @@ export default function AsideChatPanel() {
       </div>
 
       {error && (
-        <div style={{ padding: "0 var(--mantine-spacing-sm)" }}>
-          <div style={{
-            padding: "var(--mantine-spacing-xs) var(--mantine-spacing-sm)",
-            color: "var(--mantine-color-gray-6)",
-            fontSize: "var(--mantine-font-size-xs)",
-            borderRadius: "var(--mantine-radius-sm)",
-            backgroundColor: "var(--mantine-color-gray-0)",
-          }}>
+        <div className={classes.errorBanner}>
+          <div className={classes.errorContent}>
             {error}
           </div>
         </div>
@@ -240,8 +243,11 @@ export default function AsideChatPanel() {
         </>
       ) : (
         <div className={classes.emptyState}>
-          <IconSparkles size={36} stroke={1.5} className={classes.emptyStateIcon} />
+          <div className={classes.emptyStateIconWrapper}>
+            <IconSparkles size={28} stroke={1.5} />
+          </div>
           <div className={classes.emptyStateTitle}>{t("How can I help you today?")}</div>
+          <div className={classes.emptyStateSubtitle}>{t("Ask me to summarize, translate, or edit this page")}</div>
           <div className={classes.quickActions}>
             {quickActions.map((action) => (
               <button
@@ -251,7 +257,7 @@ export default function AsideChatPanel() {
                 onClick={() => handleQuickAction(action.prompt)}
               >
                 <span className={classes.quickActionIcon}>{action.icon}</span>
-                {action.label}
+                <span className={classes.quickActionLabel}>{action.label}</span>
               </button>
             ))}
           </div>

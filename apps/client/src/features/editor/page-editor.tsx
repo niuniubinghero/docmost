@@ -27,11 +27,12 @@ import {
   collabExtensions,
   mainExtensions,
 } from "@/features/editor/extensions/extensions";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import useCollaborationUrl from "@/features/editor/hooks/use-collaboration-url";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import {
   currentPageEditModeAtom,
+  editorSelectionAtom,
   pageEditorAtom,
   yjsConnectionStatusAtom,
 } from "@/features/editor/atoms/editor-atoms";
@@ -100,6 +101,7 @@ export default function PageEditor({
 
   const [currentUser] = useAtom(currentUserAtom);
   const [, setEditor] = useAtom(pageEditorAtom);
+  const setEditorSelection = useSetAtom(editorSelectionAtom);
   const [, setAsideState] = useAtom(asideStateAtom);
   const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
   const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
@@ -391,6 +393,26 @@ export default function PageEditor({
     if (!editor) return;
     editor.setEditable(editable && currentPageEditMode === PageEditMode.Edit);
   }, [currentPageEditMode, editor, editable]);
+
+  // Sync editor selection to atom for chat sidebar context
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleSelectionUpdate = () => {
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        setEditorSelection(null);
+      } else {
+        const text = editor.state.doc.textBetween(from, to, " ");
+        setEditorSelection({ from, to, text });
+      }
+    };
+
+    editor.on("selectionUpdate", handleSelectionUpdate);
+    return () => {
+      editor.off("selectionUpdate", handleSelectionUpdate);
+    };
+  }, [editor, setEditorSelection]);
 
   const hasConnectedOnceRef = useRef(false);
   const [showStatic, setShowStatic] = useState(true);
