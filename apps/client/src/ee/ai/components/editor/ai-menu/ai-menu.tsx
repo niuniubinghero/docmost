@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAtom } from "jotai";
 import { useTranslation } from "react-i18next";
-import { IconArrowUp } from "@tabler/icons-react";
+import { IconArrowUp, IconPlayerStop } from "@tabler/icons-react";
 import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { useAiGenerateStreamMutation } from "@/ee/ai/queries/ai-query.ts";
 import { AiAction } from "@/ee/ai/types/ai.types.ts";
@@ -30,6 +30,7 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
   const [showAiMenu, setShowAiMenu] = useAtom(showAiMenuAtom);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [prompt, setPrompt] = useState("");
   const [output, setOutput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -123,23 +124,31 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
 
       setOutput("");
       setIsLoading(true);
-      aiGenerateStreamMutation.mutate({
-        action: command.action,
-        prompt: command.prompt,
-        content,
-        onChunk: (chunk) => {
-          setOutput((output) => output + chunk.content);
-        },
-        onComplete: () => {
-          setPrompt("");
-          setIsLoading(false);
-          setActiveCommandSet("result");
-        },
-        onError: () => {
-          setIsLoading(false);
-          resetMenu();
-        },
-      });
+
+      // Use mutateAsync to get the abort controller
+      aiGenerateStreamMutation
+        .mutateAsync({
+          action: command.action,
+          prompt: command.prompt,
+          content,
+          onChunk: (chunk) => {
+            setOutput((output) => output + chunk.content);
+          },
+          onComplete: () => {
+            abortControllerRef.current = null;
+            setPrompt("");
+            setIsLoading(false);
+            setActiveCommandSet("result");
+          },
+          onError: () => {
+            abortControllerRef.current = null;
+            setIsLoading(false);
+            resetMenu();
+          },
+        })
+        .then((controller) => {
+          abortControllerRef.current = controller;
+        });
       setLastAction(command);
     },
     [
@@ -150,6 +159,13 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
       resetMenu,
     ],
   );
+  const handleCancel = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setIsLoading(false);
+    setOutput("");
+    setActiveCommandSet("main");
+  }, []);
   const handleCommand = useCallback(
     (item?: CommandItem) => {
       setPrompt("");
@@ -329,16 +345,28 @@ const EditorAiMenu = ({ editor }: EditorAiMenuProps): JSX.Element | null => {
             disabled={isLoading}
             onChange={(e) => setPrompt(e.currentTarget.value)}
             rightSection={
-              <ActionIcon
-                disabled={!prompt || isLoading}
-                variant="filled"
-                color="blue"
-                radius="xl"
-                size="sm"
-                onClick={() => handleGenerate()}
-              >
-                <IconArrowUp size={14} stroke={2.5} />
-              </ActionIcon>
+              isLoading ? (
+                <ActionIcon
+                  variant="filled"
+                  color="red"
+                  radius="xl"
+                  size="sm"
+                  onClick={handleCancel}
+                >
+                  <IconPlayerStop size={14} stroke={2.5} />
+                </ActionIcon>
+              ) : (
+                <ActionIcon
+                  disabled={!prompt}
+                  variant="filled"
+                  color="blue"
+                  radius="xl"
+                  size="sm"
+                  onClick={() => handleGenerate()}
+                >
+                  <IconArrowUp size={14} stroke={2.5} />
+                </ActionIcon>
+              )
             }
             onKeyDown={handleKeyDown}
           />

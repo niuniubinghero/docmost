@@ -49,7 +49,7 @@ export default function Aside() {
   }
 
   return (
-    <Box p="md" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box p="xs" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {component && (
         <>
           {tab !== "chat" && (

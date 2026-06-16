@@ -76,3 +76,16 @@ export const AI_PROVIDER_DEFAULTS: Record<
   qwen: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', modelName: 'qwen-plus' },
   custom: { baseUrl: '', modelName: '' },
 };
+
+export const MODEL_PRESETS: Record<AiProviderType, string[]> = {
+  mimo: ['mimo-7b', 'mimo-13b'],
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'o1-preview', 'o1-mini'],
+  gemini: ['gemini-pro', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-ultra'],
+  ollama: ['llama3', 'llama3:8b', 'llama3:70b', 'mistral', 'codellama', 'phi3', 'gemma', 'qwen2'],
+  claude: ['claude-3-sonnet-20240229', 'claude-3-opus-20240229', 'claude-3-haiku-20240307', 'claude-3.5-sonnet-20241022'],
+  'claude-compat': [],
+  kimi: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+  deepseek: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
+  qwen: ['qwen-plus', 'qwen-turbo', 'qwen-max', 'qwen-long'],
+  custom: [],
+};

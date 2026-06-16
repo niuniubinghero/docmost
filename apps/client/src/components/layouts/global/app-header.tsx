@@ -120,23 +120,28 @@ export function AppHeader() {
         <Group px={"xl"} wrap="nowrap">
           {aiChatEnabled && (
             <>
-              <UnstyledButton
-                component={Link}
-                to="/ai"
-                className={classes.link}
-                visibleFrom="sm"
-                onClick={(e: React.MouseEvent) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-                    return;
-                  }
-                  if (isPageRoute) {
-                    e.preventDefault();
-                    toggleAside("chat");
-                  }
-                }}
-              >
-                {t("AI Chat")}
-              </UnstyledButton>
+              <Tooltip label={t("AI Chat")} openDelay={250} withArrow>
+                <ActionIcon
+                  component={Link}
+                  to="/ai"
+                  variant="subtle"
+                  color="dark"
+                  size="sm"
+                  visibleFrom="sm"
+                  aria-label={t("AI Chat")}
+                  onClick={(e: React.MouseEvent) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+                      return;
+                    }
+                    if (isPageRoute) {
+                      e.preventDefault();
+                      toggleAside("chat");
+                    }
+                  }}
+                >
+                  <IconSparkles size={20} stroke={2} />
+                </ActionIcon>
+              </Tooltip>
               <Tooltip label={t("AI Chat")} openDelay={250} withArrow>
                 <ActionIcon
                   component={Link}

@@ -22,6 +22,7 @@ import type {
 import {
   AI_PROVIDER_TYPE_LABELS,
   AI_PROVIDER_DEFAULTS,
+  MODEL_PRESETS,
 } from "@/ee/ai-provider/types/ai-provider.types";
 
 interface AiProviderFormModalProps {
@@ -137,13 +138,27 @@ export function AiProviderFormModal({ provider, onSuccess }: AiProviderFormModal
         disabled={isEditing}
       />
 
-      <TextInput
-        label="Model Name"
-        placeholder="e.g., mimo-7b, gpt-4o"
-        value={modelName}
-        onChange={(e) => setModelName(e.currentTarget.value)}
-        required
-      />
+      {MODEL_PRESETS[type]?.length > 0 ? (
+        <Select
+          label="Model Name"
+          data={MODEL_PRESETS[type].map((model) => ({
+            value: model,
+            label: model,
+          }))}
+          value={modelName}
+          onChange={(value) => value && setModelName(value)}
+          searchable
+          required
+        />
+      ) : (
+        <TextInput
+          label="Model Name"
+          placeholder="e.g., model-name"
+          value={modelName}
+          onChange={(e) => setModelName(e.currentTarget.value)}
+          required
+        />
+      )}
 
       <TextInput
         label="Base URL"
