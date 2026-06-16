@@ -46,6 +46,7 @@ export async function searchChats(query: string): Promise<AiChat[]> {
 export async function uploadChatFile(
   file: File,
   chatId?: string,
+  onProgress?: (progress: number) => void,
 ): Promise<ChatAttachment> {
   const formData = new FormData();
   formData.append("file", file);
@@ -54,7 +55,26 @@ export async function uploadChatFile(
   }
   return await api.post("/ai/chats/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: (progressEvent) => {
+      if (progressEvent.total) {
+        const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress?.(progress);
+      }
+    },
   });
+}
+
+export async function writeToPage(
+  pageId: string,
+  content: string,
+  operation: "append" | "prepend" | "replace" = "append",
+): Promise<{ success: boolean; error?: string }> {
+  const req = await api.post("/ai/chats/write-to-page", {
+    pageId,
+    content,
+    operation,
+  });
+  return req.data;
 }
 
 export function sendChatMessage(

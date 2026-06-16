@@ -7,8 +7,10 @@ export const TOOL_LABELS: Record<string, string> = {
   list_spaces: "Listed spaces",
   search_pages: "Searched pages",
   get_page: "Read page",
+  read_page: "Read page",
   create_page: "Created page",
   update_page: "Updated page",
+  update_page_content: "Updated page content",
 };
 
 type Props = {

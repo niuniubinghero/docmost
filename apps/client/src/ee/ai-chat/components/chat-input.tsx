@@ -15,7 +15,7 @@ import { uploadChatFile } from "../services/ai-chat-service";
 import type { ChatAttachment, PageMention } from "../types/ai-chat.types";
 import classes from "../styles/chat-input.module.css";
 
-type PendingAttachment = ChatAttachment & { uploading: boolean };
+type PendingAttachment = ChatAttachment & { uploading: boolean; progress?: number };
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif"];
 const ACCEPTED_FILE_TYPES = ".pdf,.docx,.txt,.csv,.md,.png,.jpg,.jpeg,.webp";
@@ -109,6 +109,7 @@ export default function ChatInput({
   const [isEmpty, setIsEmpty] = useState(true);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const plusMenuId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onSendRef = useRef(onSend);
@@ -158,10 +159,16 @@ export default function ChatInput({
       setPendingAttachments((prev) => [...prev, placeholder]);
 
       try {
-        const uploaded = await uploadChatFile(file, chatIdRef.current);
+        const uploaded = await uploadChatFile(file, chatIdRef.current, (progress) => {
+          setPendingAttachments((prev) =>
+            prev.map((a) =>
+              a.id === tempId ? { ...a, progress } : a,
+            ),
+          );
+        });
         setPendingAttachments((prev) =>
           prev.map((a) =>
-            a.id === tempId ? { ...uploaded, uploading: false } : a,
+            a.id === tempId ? { ...uploaded, uploading: false, progress: 100 } : a,
           ),
         );
       } catch {
@@ -173,6 +180,38 @@ export default function ChatInput({
       fileInputRef.current.value = "";
     }
   }, [pendingAttachments.length, t]);
+
+  // Drag and drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the wrapper entirely
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files?.length) {
+      handleFileSelect(files);
+    }
+  }, [handleFileSelect]);
 
   const removeAttachment = useCallback((id: string) => {
     setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
@@ -285,7 +324,20 @@ export default function ChatInput({
 
   return (
     <>
-    <div className={wrapperClass} data-chat-input>
+    <div
+      className={`${wrapperClass} ${isDragging ? classes.dragging : ""}`}
+      data-chat-input
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className={classes.dragOverlay}>
+          <IconFile size={24} />
+          <span>{t("Drop files here")}</span>
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"
@@ -330,6 +382,14 @@ export default function ChatInput({
               <span className={classes.attachmentChipName}>
                 {attachment.fileName}
               </span>
+              {attachment.uploading && attachment.progress !== undefined && (
+                <div className={classes.uploadProgress}>
+                  <div
+                    className={classes.uploadProgressBar}
+                    style={{ width: `${attachment.progress}%` }}
+                  />
+                </div>
+              )}
               {!attachment.uploading && (
                 <button
                   type="button"

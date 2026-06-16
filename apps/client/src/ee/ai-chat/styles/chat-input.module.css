@@ -25,6 +25,31 @@
   }
 }
 
+.dragging {
+  border-color: var(--mantine-color-blue-5);
+  box-shadow: 0 0 0 2px var(--mantine-color-blue-2);
+}
+
+.dragOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: light-dark(
+    rgba(var(--mantine-color-blue-0-rgb), 0.9),
+    rgba(var(--mantine-color-blue-9-rgb), 0.9)
+  );
+  border-radius: 16px;
+  color: var(--mantine-color-blue-6);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 500;
+  z-index: 10;
+  animation: fadeIn 0.15s ease;
+}
+
 .inputWrapperFlat {
   position: relative;
   overflow: hidden;
@@ -54,6 +79,7 @@
 }
 
 .attachmentChip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -63,6 +89,19 @@
   color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
   font-size: var(--mantine-font-size-xs);
   max-width: 200px;
+  overflow: hidden;
+  animation: chipSlideIn 0.2s ease;
+}
+
+@keyframes chipSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .attachmentChipUploading {
@@ -90,6 +129,22 @@
   @mixin hover {
     color: light-dark(var(--mantine-color-gray-8), var(--mantine-color-dark-0));
   }
+}
+
+.uploadProgress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  overflow: hidden;
+}
+
+.uploadProgressBar {
+  height: 100%;
+  background: var(--mantine-color-blue-5);
+  transition: width 150ms ease;
 }
 
 .editorContent {
@@ -141,7 +196,7 @@
   justify-content: center;
   border: none;
   cursor: pointer;
-  transition: background-color 150ms, opacity 150ms;
+  transition: background-color 150ms, opacity 150ms, transform 150ms;
   background: light-dark(var(--mantine-color-dark-9), var(--mantine-color-gray-0));
   color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-9));
 
@@ -153,7 +208,12 @@
   @mixin hover {
     &:not(:disabled) {
       opacity: 0.85;
+      transform: scale(1.05);
     }
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
   }
 }
 
@@ -230,13 +290,57 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border: 1px solid light-dark(var(--mantine-color-red-3), var(--mantine-color-red-8));
   cursor: pointer;
-  transition: background-color 150ms;
+  transition: background-color 150ms, transform 150ms, box-shadow 150ms;
   background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
-  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+  color: light-dark(var(--mantine-color-red-6), var(--mantine-color-red-4));
+  animation: stopPulse 1.5s ease-in-out infinite;
 
   @mixin hover {
-    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+    background: light-dark(var(--mantine-color-red-0), var(--mantine-color-red-9));
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+@keyframes stopPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .inputWrapper {
+    border-radius: 12px;
+  }
+
+  .editorContent :global(.ProseMirror) {
+    padding: 12px 14px 6px;
+    font-size: 14px;
+    max-height: 150px;
+  }
+
+  .actions {
+    padding: 4px 10px 8px;
+  }
+
+  .attachmentChips {
+    padding: 8px 10px 0;
   }
 }

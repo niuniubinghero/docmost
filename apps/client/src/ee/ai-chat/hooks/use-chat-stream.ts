@@ -170,6 +170,11 @@ export function useChatStream(
               });
               break;
             }
+            case "page_updated":
+              queryClient.invalidateQueries({
+                queryKey: ["page", event.pageId],
+              });
+              break;
             case "error":
               setError(event.message);
               setErrorCode(event.code || null);

@@ -1,16 +1,18 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import DOMPurify from "dompurify";
-import { ActionIcon, Tooltip } from "@mantine/core";
+import { ActionIcon, Menu, Tooltip } from "@mantine/core";
 import {
   IconCheck,
   IconCopy,
   IconFile,
-  IconLoader2,
   IconPhoto,
   IconFileText,
   IconSparkles,
+  IconRefresh,
+  IconEdit,
+  IconDots,
 } from "@tabler/icons-react";
 import { markdownToHtml } from "@docmost/editor-ext";
 import { CopyButton } from "@/components/common/copy-button";
@@ -59,6 +61,83 @@ export default function ChatMessage({
 }: Props) {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Process code blocks for syntax highlighting and copy buttons
+  useEffect(() => {
+    if (!contentRef.current) return;
+
+    const processCodeBlocks = async () => {
+      const { default: hljs } = await import("highlight.js");
+      const codeBlocks = contentRef.current?.querySelectorAll("pre > code");
+      if (!codeBlocks) return;
+
+      codeBlocks.forEach((codeEl) => {
+        const pre = codeEl.parentElement;
+        if (!pre || pre.getAttribute("data-processed")) return;
+        pre.setAttribute("data-processed", "true");
+
+        // Get language from class
+        const classStr = codeEl.className;
+        const langMatch = classStr.match(/language-(\w+)/);
+        const language = langMatch?.[1] || "";
+
+        // Apply syntax highlighting
+        if (language) {
+          try {
+            const result = hljs.highlight(codeEl.textContent || "", { language, ignoreIllegals: true });
+            codeEl.innerHTML = result.value;
+          } catch {
+            // Ignore errors
+          }
+        } else {
+          try {
+            const result = hljs.highlightAuto(codeEl.textContent || "");
+            codeEl.innerHTML = result.value;
+          } catch {
+            // Ignore errors
+          }
+        }
+
+        // Add wrapper and copy button
+        const wrapper = document.createElement("div");
+        wrapper.className = "code-block-wrapper";
+        wrapper.style.cssText = "position:relative;margin:12px 0;border-radius:8px;overflow:hidden;background:light-dark(var(--mantine-color-gray-0),var(--mantine-color-dark-6));border:1px solid light-dark(var(--mantine-color-gray-2),var(--mantine-color-dark-4))";
+
+        const header = document.createElement("div");
+        header.style.cssText = "display:flex;align-items:center;justify-content:flex-end;padding:4px 8px;background:light-dark(var(--mantine-color-gray-1),var(--mantine-color-dark-5));border-bottom:1px solid light-dark(var(--mantine-color-gray-2),var(--mantine-color-dark-4))";
+
+        const copyBtn = document.createElement("button");
+        copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+        copyBtn.style.cssText = "display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:4px;background:transparent;cursor:pointer;color:var(--mantine-color-dimmed);transition:background 150ms,color 150ms";
+        copyBtn.onmouseenter = () => {
+          copyBtn.style.background = "light-dark(var(--mantine-color-gray-2),var(--mantine-color-dark-4))";
+          copyBtn.style.color = "light-dark(var(--mantine-color-gray-7),var(--mantine-color-dark-2))";
+        };
+        copyBtn.onmouseleave = () => {
+          copyBtn.style.background = "transparent";
+          copyBtn.style.color = "var(--mantine-color-dimmed)";
+        };
+        copyBtn.onclick = async () => {
+          await navigator.clipboard.writeText(codeEl.textContent || "");
+          copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+          setTimeout(() => {
+            copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+          }, 2000);
+        };
+
+        header.appendChild(copyBtn);
+        wrapper.appendChild(header);
+
+        pre.style.cssText = "margin:0;padding:12px 16px;overflow-x:auto;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;line-height:1.5;background:transparent";
+
+        wrapper.appendChild(pre.cloneNode(true));
+        pre.replaceWith(wrapper);
+      });
+    };
+
+    processCodeBlocks();
+  }, [message.content, streamingContent]);
 
   const handleContentClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -154,6 +233,7 @@ export default function ChatMessage({
         )}
         {content && (
           <div
+            ref={contentRef}
             onClick={handleContentClick}
             dangerouslySetInnerHTML={{
               __html: chatSanitizer.sanitize(
@@ -167,22 +247,58 @@ export default function ChatMessage({
           <>
             {!content && (
               <span className={classes.processingIndicator}>
-                <IconLoader2 size={16} className={classes.processingSpinner} />
-                Thinking
+                <span className={classes.thinkingDots}>
+                  <span className={classes.thinkingDot} />
+                  <span className={classes.thinkingDot} />
+                  <span className={classes.thinkingDot} />
+                </span>
+                Thinking...
               </span>
             )}
-            <span className={classes.streamingCursor} />
+            {content && <span className={classes.streamingCursor} />}
           </>
         )}
+        {!isStreaming && message.content && (
+          <div className={classes.messageActions}>
+            <Tooltip label={t("Copy")}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(message.content || "");
+                }}
+              >
+                <IconCopy size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={t("Regenerate")}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => {
+                  // TODO: Implement regenerate functionality
+                }}
+              >
+                <IconRefresh size={14} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={t("Insert to editor")}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => {
+                  // TODO: Implement insert to editor functionality
+                }}
+              >
+                <IconEdit size={14} />
+              </ActionIcon>
+            </Tooltip>
+          </div>
+        )}
       </div>
-      {!isStreaming && message.content && (
-        <div className={classes.messageActions}>
-          <CopyTextButton
-            text={message?.content}
-            label={t("Copy assistant response")}
-          />
-        </div>
-      )}
     </div>
   );
 }

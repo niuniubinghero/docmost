@@ -29,6 +29,7 @@ export type AiChatStreamEvent =
   | { type: 'content'; text: string }
   | { type: 'tool_call'; id: string; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; id: string; result: unknown }
+  | { type: 'page_updated'; pageId: string }
   | { type: 'done'; messageId: string; usage?: Record<string, number> }
   | { type: 'error'; message: string; code?: string; retryable?: boolean };
 

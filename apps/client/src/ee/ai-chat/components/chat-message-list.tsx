@@ -1,8 +1,9 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { IconArrowDown, IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { VisuallyHidden } from "@mantine/core";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AiChatMessage, AiChatToolCall } from "../types/ai-chat.types";
 import ChatMessage from "./chat-message";
 import classes from "../styles/ai-chat.module.css";
@@ -27,6 +28,7 @@ type Props = {
 const BOTTOM_THRESHOLD_PX = 32;
 const SCROLL_UP_THRESHOLD_PX = 5;
 const SMOOTH_SCROLL_SETTLE_MS = 600;
+const ESTIMATED_ITEM_SIZE = 100;
 
 export default function ChatMessageList({
   messages,
@@ -48,6 +50,23 @@ export default function ChatMessageList({
   // the full assistant reply once streaming completes — a single, clean read.
   const [statusAnnouncement, setStatusAnnouncement] = useState("");
   const wasStreamingRef = useRef(false);
+
+  // Virtual list items
+  type VirtualItem = { type: "message"; data: AiChatMessage } | { type: "streaming"; data: null };
+  const virtualItems = useMemo(() => {
+    const items: VirtualItem[] = messages.map((msg) => ({ type: "message", data: msg }));
+    if (isStreaming) {
+      items.push({ type: "streaming", data: null });
+    }
+    return items;
+  }, [messages, isStreaming]);
+
+  const virtualizer = useVirtualizer({
+    count: virtualItems.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => ESTIMATED_ITEM_SIZE,
+    overscan: 5,
+  });
 
   useEffect(() => {
     const justStartedStreaming = isStreaming && !wasStreamingRef.current;
@@ -85,6 +104,11 @@ export default function ChatMessageList({
     isAtBottomRef.current = true;
     setShowScrollButton(false);
 
+    // Scroll virtual list to end
+    if (virtualItems.length > 0) {
+      virtualizer.scrollToIndex(virtualItems.length - 1, { align: "end" });
+    }
+
     if (behavior === "smooth") {
       setTimeout(() => {
         isAutoScrollingRef.current = false;
@@ -95,7 +119,7 @@ export default function ChatMessageList({
     } else {
       isAutoScrollingRef.current = false;
     }
-  }, []);
+  }, [virtualItems.length, virtualizer]);
 
   const handleScroll = useCallback(() => {
     if (isAutoScrollingRef.current) return;
@@ -172,36 +196,61 @@ export default function ChatMessageList({
         ref={containerRef}
         className={classes.messageList}
         aria-label={t("Chat transcript")}
+        style={{ contain: "strict" }}
       >
-        {messages.map((msg) => (
-          <ErrorBoundary
-            key={msg.id}
-            fallback={<ChatMessageErrorFallback />}
-          >
-            <ChatMessage message={msg} />
-          </ErrorBoundary>
-        ))}
-        {isStreaming && (
-          <ErrorBoundary
-            resetKeys={[streamingContent, streamingToolCalls.length]}
-            fallback={<ChatMessageErrorFallback />}
-          >
-            <ChatMessage
-              message={{
-                id: "streaming",
-                chatId: "",
-                role: "assistant",
-                content: null,
-                toolCalls: null,
-                metadata: null,
-                createdAt: new Date().toISOString(),
-              }}
-              isStreaming
-              streamingContent={streamingContent}
-              streamingToolCalls={streamingToolCalls}
-            />
-          </ErrorBoundary>
-        )}
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const item = virtualItems[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {item.type === "message" ? (
+                  <ErrorBoundary
+                    fallback={<ChatMessageErrorFallback />}
+                  >
+                    <ChatMessage message={item.data} />
+                  </ErrorBoundary>
+                ) : (
+                  <ErrorBoundary
+                    resetKeys={[streamingContent, streamingToolCalls.length]}
+                    fallback={<ChatMessageErrorFallback />}
+                  >
+                    <ChatMessage
+                      message={{
+                        id: "streaming",
+                        chatId: "",
+                        role: "assistant",
+                        content: null,
+                        toolCalls: null,
+                        metadata: null,
+                        createdAt: new Date().toISOString(),
+                      }}
+                      isStreaming
+                      streamingContent={streamingContent}
+                      streamingToolCalls={streamingToolCalls}
+                    />
+                  </ErrorBoundary>
+                )}
+              </div>
+            );
+          })}
+        </div>
         <div ref={bottomRef} />
       </div>
       {showScrollButton && (
