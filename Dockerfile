@@ -9,7 +9,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
+RUN rm -f pnpm-lock.yaml && pnpm install --no-frozen-lockfile
 RUN pnpm build
 
 FROM base AS installer
@@ -37,11 +37,13 @@ COPY --from=builder /app/.npmrc /app/.npmrc
 # Copy patches
 COPY --from=builder /app/patches /app/patches
 
+RUN rm -rf apps/mobile && rm -f pnpm-lock.yaml
+
 RUN chown -R node:node /app
 
 USER node
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --no-frozen-lockfile --prod
 
 RUN mkdir -p /app/data/storage
 
