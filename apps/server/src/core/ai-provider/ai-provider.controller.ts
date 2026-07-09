@@ -12,7 +12,7 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { AiProviderService } from './ai-provider.service';
-import { CreateAiProviderDto, UpdateAiProviderDto } from './dto/ai-provider.dto';
+import { CreateAiProviderDto, UpdateAiProviderDto, FetchModelsDto } from './dto/ai-provider.dto';
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import {
   WorkspaceCaslAction,
@@ -100,5 +100,16 @@ export class AiProviderController {
   ) {
     this.checkAdmin(user, workspace);
     return this.aiProviderService.testConnection(body.providerId, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('models')
+  async fetchModels(
+    @Body() dto: FetchModelsDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    this.checkAdmin(user, workspace);
+    return this.aiProviderService.fetchModels(dto.type, dto.apiKey, dto.baseUrl);
   }
 }

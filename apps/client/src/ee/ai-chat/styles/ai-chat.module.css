@@ -188,6 +188,47 @@
   flex: 1;
 }
 
+/* Error category color variants */
+.errorMessage[data-error-category="network"] {
+  background: light-dark(var(--mantine-color-orange-0), rgba(255, 165, 0, 0.15));
+  border-color: light-dark(var(--mantine-color-orange-3), var(--mantine-color-orange-8));
+}
+.errorMessage[data-error-category="network"] .errorIcon {
+  color: var(--mantine-color-orange-6);
+}
+
+.errorMessage[data-error-category="auth"] {
+  background: light-dark(var(--mantine-color-red-0), var(--mantine-color-red-9));
+  border-color: light-dark(var(--mantine-color-red-4), var(--mantine-color-red-7));
+}
+.errorMessage[data-error-category="auth"] .errorIcon {
+  color: var(--mantine-color-red-6);
+}
+
+.errorMessage[data-error-category="rate_limit"] {
+  background: light-dark(var(--mantine-color-yellow-0), rgba(255, 200, 0, 0.15));
+  border-color: light-dark(var(--mantine-color-yellow-3), var(--mantine-color-yellow-8));
+}
+.errorMessage[data-error-category="rate_limit"] .errorIcon {
+  color: var(--mantine-color-yellow-6);
+}
+
+.errorMessage[data-error-category="config"] {
+  background: light-dark(var(--mantine-color-blue-0), rgba(0, 100, 255, 0.15));
+  border-color: light-dark(var(--mantine-color-blue-3), var(--mantine-color-blue-8));
+}
+.errorMessage[data-error-category="config"] .errorIcon {
+  color: var(--mantine-color-blue-6);
+}
+
+.errorMessage[data-error-category="server"] {
+  background: light-dark(var(--mantine-color-red-0), var(--mantine-color-red-9));
+  border-color: light-dark(var(--mantine-color-red-3), var(--mantine-color-red-8));
+}
+.errorMessage[data-error-category="server"] .errorIcon {
+  color: var(--mantine-color-red-6);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -295,7 +336,11 @@
   border: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
   border-radius: var(--mantine-radius-md);
   cursor: pointer;
-  background: transparent;
+  background: linear-gradient(
+    135deg,
+    light-dark(rgba(232, 242, 255, 0.4), rgba(30, 55, 100, 0.15)),
+    light-dark(rgba(245, 240, 255, 0.3), rgba(50, 30, 80, 0.1))
+  );
   transition: background-color 150ms, border-color 150ms, transform 150ms, box-shadow 150ms;
   text-align: left;
   width: 100%;
@@ -308,10 +353,14 @@
   &:nth-child(5) { animation-delay: 0.35s; }
 
   @mixin hover {
-    background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
-    border-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    background: linear-gradient(
+      135deg,
+      light-dark(rgba(232, 242, 255, 0.7), rgba(30, 55, 100, 0.3)),
+      light-dark(rgba(245, 240, 255, 0.6), rgba(50, 30, 80, 0.2))
+    );
+    border-color: light-dark(var(--mantine-color-blue-3), var(--mantine-color-dark-4));
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   }
 
   &:active {
@@ -326,8 +375,15 @@
 
 .suggestionIcon {
   flex-shrink: 0;
-  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+  color: light-dark(var(--mantine-color-blue-6), var(--mantine-color-blue-4));
   margin-top: 1px;
+  background: light-dark(rgba(232, 242, 255, 0.6), rgba(30, 55, 100, 0.3));
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .suggestionText {

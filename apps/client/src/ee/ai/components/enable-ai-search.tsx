@@ -44,7 +44,7 @@ export function AiSearchToggle({ size, label }: AiSearchToggleProps) {
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.currentTarget.checked;
     try {
-      const updatedWorkspace = await updateWorkspace({ aiSearch: value });
+      const updatedWorkspace = await updateWorkspace({ settings: { ai: { search: value } } });
       setChecked(value);
       setWorkspace(updatedWorkspace);
     } catch (err) {
@@ -61,7 +61,7 @@ export function AiSearchToggle({ size, label }: AiSearchToggleProps) {
         size={size}
         label={label}
         labelPosition="left"
-        defaultChecked={checked}
+        checked={checked}
         onChange={handleChange}
         disabled={!hasAccess}
         aria-label={t("Toggle AI search")}

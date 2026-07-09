@@ -61,6 +61,16 @@ export class AiProviderRepo {
     'aiProviders.updatedAt',
   ] as const;
 
+  private maskApiKey(provider: AiProvider): AiProvider {
+    if (!provider) return provider;
+    return {
+      ...provider,
+      apiKey: provider.apiKey
+        ? `****${provider.apiKey.slice(-4)}`
+        : null,
+    };
+  }
+
   async findById(
     providerId: string,
     workspaceId: string,
@@ -76,13 +86,14 @@ export class AiProviderRepo {
   }
 
   async findByWorkspace(workspaceId: string): Promise<AiProvider[]> {
-    return this.db
+    const providers = await this.db
       .selectFrom('aiProviders')
       .select(this.baseFields)
       .where('workspaceId', '=', workspaceId)
       .orderBy('isDefault', 'desc')
       .orderBy('createdAt', 'desc')
       .execute();
+    return providers.map((p) => this.maskApiKey(p));
   }
 
   async findDefault(workspaceId: string): Promise<AiProvider> {

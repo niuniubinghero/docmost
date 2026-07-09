@@ -197,20 +197,23 @@ export class AiService {
       ? `${baseUrl}/chat/completions`
       : `${baseUrl}/v1/chat/completions`;
 
-    const response = await fetch(chatUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: options?.model || provider.modelName,
-        messages,
-        temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: false,
+    const response = await this.withTimeout(
+      fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: options?.model || provider.modelName,
+          messages,
+          temperature: options?.temperature ?? 0.7,
+          max_tokens: options?.maxTokens ?? 2048,
+          stream: false,
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -365,20 +368,23 @@ export class AiService {
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): Promise<string> {
-    const response = await fetch(`${baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': provider.apiKey || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: provider.modelName,
-        max_tokens: options?.maxTokens ?? 2048,
-        messages: messages.filter((m) => m.role !== 'system'),
-        system: messages.find((m) => m.role === 'system')?.content,
+    const response = await this.withTimeout(
+      fetch(`${baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': provider.apiKey || '',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: provider.modelName,
+          max_tokens: options?.maxTokens ?? 2048,
+          messages: messages.filter((m) => m.role !== 'system'),
+          system: messages.find((m) => m.role === 'system')?.content,
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -395,26 +401,29 @@ export class AiService {
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): AsyncGenerator<AiStreamChunk> {
-    const response = await fetch(`${baseUrl}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': provider.apiKey || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: provider.modelName,
-        max_tokens: options?.maxTokens ?? 4096,
-        messages: messages.filter((m) => m.role !== 'system'),
-        system: messages.find((m) => m.role === 'system')?.content,
-        stream: true,
-        ...(options?.tools?.length ? { tools: options.tools.map(t => ({
-          name: t.function.name,
-          description: t.function.description,
-          input_schema: t.function.parameters,
-        })) } : {}),
+    const response = await this.withTimeout(
+      fetch(`${baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': provider.apiKey || '',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: provider.modelName,
+          max_tokens: options?.maxTokens ?? 4096,
+          messages: messages.filter((m) => m.role !== 'system'),
+          system: messages.find((m) => m.role === 'system')?.content,
+          stream: true,
+          ...(options?.tools?.length ? { tools: options.tools.map(t => ({
+            name: t.function.name,
+            description: t.function.description,
+            input_schema: t.function.parameters,
+          })) } : {}),
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -424,28 +433,66 @@ export class AiService {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const timeoutMs = options?.timeoutMs ?? 120000;
+    const startTime = Date.now();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    // Accumulate tool use blocks from Claude streaming
+    const toolUseAccumulator: Map<string, { id: string; name: string; input: string }> = new Map();
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    try {
+      while (true) {
+        if (Date.now() - startTime > timeoutMs) {
+          throw new BadRequestException(`Claude streaming timed out after ${timeoutMs}ms`);
+        }
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'content_block_delta') {
-              yield { type: 'content', content: parsed.delta?.text || '' };
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'content_block_start') {
+                // Track tool_use content blocks
+                if (parsed.content_block?.type === 'tool_use') {
+                  toolUseAccumulator.set(parsed.index?.toString() || parsed.content_block.id, {
+                    id: parsed.content_block.id || '',
+                    name: parsed.content_block.name || '',
+                    input: '',
+                  });
+                }
+              } else if (parsed.type === 'content_block_delta') {
+                if (parsed.delta?.type === 'text_delta') {
+                  yield { type: 'content', content: parsed.delta.text || '' };
+                } else if (parsed.delta?.type === 'input_json_delta') {
+                  // Accumulate tool use input JSON deltas
+                  const key = parsed.index?.toString();
+                  if (key && toolUseAccumulator.has(key)) {
+                    toolUseAccumulator.get(key)!.input += parsed.delta.partial_json || '';
+                  }
+                }
+              } else if (parsed.type === 'message_stop') {
+                // Yield all accumulated tool calls
+                for (const [, tc] of toolUseAccumulator) {
+                  yield {
+                    type: 'tool_call',
+                    toolCall: { id: tc.id, name: tc.name, arguments: tc.input },
+                  };
+                }
+              }
+            } catch (e) {
+              // Skip invalid JSON
             }
-          } catch (e) {
-            // Skip invalid JSON
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
 
@@ -455,17 +502,23 @@ export class AiService {
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): Promise<string> {
-    const url = `${baseUrl}/models/${provider.modelName}:generateContent?key=${provider.apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: messages.map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        })),
+    const url = `${baseUrl}/models/${provider.modelName}:generateContent`;
+    const response = await this.withTimeout(
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': provider.apiKey || '',
+        },
+        body: JSON.stringify({
+          contents: messages.map((m) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          })),
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -482,21 +535,29 @@ export class AiService {
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): AsyncGenerator<AiStreamChunk> {
-    const url = `${baseUrl}/models/${provider.modelName}:streamGenerateContent?key=${provider.apiKey}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: messages.map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        })),
-        generationConfig: {
-          maxOutputTokens: options?.maxTokens ?? 2048,
-          temperature: options?.temperature ?? 0.7,
+    const url = `${baseUrl}/models/${provider.modelName}:streamGenerateContent?alt=sse`;
+    const timeoutMs = options?.timeoutMs ?? 120000;
+
+    const response = await this.withTimeout(
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': provider.apiKey || '',
         },
+        body: JSON.stringify({
+          contents: messages.map((m) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          })),
+          generationConfig: {
+            maxOutputTokens: options?.maxTokens ?? 2048,
+            temperature: options?.temperature ?? 0.7,
+          },
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -506,70 +567,36 @@ export class AiService {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const startTime = Date.now();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        if (Date.now() - startTime > timeoutMs) {
+          throw new BadRequestException(`Gemini streaming timed out after ${timeoutMs}ms`);
+        }
 
-      buffer += decoder.decode(value, { stream: true });
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      // Gemini streaming returns JSON array chunks
-      // Try to parse complete JSON objects from the buffer
-      let jsonStartIndex = buffer.indexOf('{');
-      if (jsonStartIndex === -1) {
-        jsonStartIndex = buffer.indexOf('[');
-      }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
-      if (jsonStartIndex >= 0) {
-        // Find the matching closing bracket
-        let depth = 0;
-        let inString = false;
-        let escape = false;
-        const startChar = buffer[jsonStartIndex];
-        const endChar = startChar === '{' ? '}' : ']';
-
-        for (let i = jsonStartIndex; i < buffer.length; i++) {
-          const char = buffer[i];
-
-          if (escape) {
-            escape = false;
-            continue;
-          }
-
-          if (char === '\\') {
-            escape = true;
-            continue;
-          }
-
-          if (char === '"') {
-            inString = !inString;
-            continue;
-          }
-
-          if (inString) continue;
-
-          if (char === startChar) depth++;
-          else if (char === endChar) {
-            depth--;
-            if (depth === 0) {
-              const jsonStr = buffer.substring(jsonStartIndex, i + 1);
-              try {
-                const parsed = JSON.parse(jsonStr);
-                // Handle both single object and array responses
-                const candidates = Array.isArray(parsed) ? parsed : [parsed];
-                for (const candidate of candidates) {
-                  const text = candidate.candidates?.[0]?.content?.parts?.[0]?.text;
-                  if (text) yield { type: 'content', content: text };
-                }
-              } catch (e) {
-                // Skip invalid JSON
-              }
-              buffer = buffer.substring(i + 1);
-              break;
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) yield { type: 'content', content: text };
+            } catch (e) {
+              // Skip invalid JSON
             }
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
 
@@ -579,15 +606,18 @@ export class AiService {
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): Promise<string> {
-    const response = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: provider.modelName,
-        messages,
-        stream: false,
+    const response = await this.withTimeout(
+      fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: provider.modelName,
+          messages,
+          stream: false,
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -604,15 +634,20 @@ export class AiService {
     messages: AiChatMessage[],
     options?: AiChatOptions,
   ): AsyncGenerator<AiStreamChunk> {
-    const response = await fetch(`${baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: provider.modelName,
-        messages,
-        stream: true,
+    const timeoutMs = options?.timeoutMs ?? 120000;
+
+    const response = await this.withTimeout(
+      fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: provider.modelName,
+          messages,
+          stream: true,
+        }),
       }),
-    });
+      30000,
+    );
 
     if (!response.ok) {
       const error = await response.text();
@@ -622,27 +657,36 @@ export class AiService {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const startTime = Date.now();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        if (Date.now() - startTime > timeoutMs) {
+          throw new BadRequestException(`Ollama streaming timed out after ${timeoutMs}ms`);
+        }
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      for (const line of lines) {
-        if (line) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.message?.content) {
-              yield { type: 'content', content: parsed.message.content };
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.message?.content) {
+                yield { type: 'content', content: parsed.message.content };
+              }
+            } catch (e) {
+              // Skip invalid JSON
             }
-          } catch (e) {
-            // Skip invalid JSON
           }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
   }
 }

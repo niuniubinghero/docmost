@@ -3,10 +3,16 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
   Res,
 } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import {
+  AI_CHAT_THROTTLER,
+  AUTH_THROTTLER,
+} from '../../integrations/throttle/throttler-names';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
@@ -31,9 +37,13 @@ function supportsNativeToolCalls(providerType: string): boolean {
   return NATIVE_TOOL_CALL_PROVIDERS.has(providerType);
 }
 
-@UseGuards(JwtAuthGuard)
+@SkipThrottle({ [AUTH_THROTTLER]: true })
+@Throttle({ [AI_CHAT_THROTTLER]: { limit: 25, ttl: 60000 } })
+@UseGuards(JwtAuthGuard, ThrottlerGuard)
 @Controller('ai/chats')
 export class AiChatController {
+  private readonly logger = new Logger(AiChatController.name);
+
   constructor(
     private aiChatService: AiChatService,
     private aiService: AiService,
@@ -284,8 +294,7 @@ Then after getting results, output another tool block with the page ID.`,
           return result;
         } catch (error: any) {
           // Log error to stderr which should be visible
-          process.stderr.write(`[AI-CHAT-ERROR] Failed to save user message: ${error?.message || String(error)}\n`);
-          process.stderr.write(`[AI-CHAT-ERROR] Stack: ${error?.stack || 'N/A'}\n`);
+          this.logger.error(`Failed to save user message: ${error?.message || String(error)}`, error?.stack);
           return null;
         }
       };
@@ -293,7 +302,7 @@ Then after getting results, output another tool block with the page ID.`,
       // Execute but don't await - let it run in background
       saveUserMessage().then((result) => {
         if (result) {
-          process.stderr.write(`[AI-CHAT] User message saved: ${result.id}\n`);
+          this.logger.debug(`User message saved: ${result.id}`);
         }
       });
 
@@ -336,7 +345,7 @@ Then after getting results, output another tool block with the page ID.`,
                 params: JSON.parse(tc.arguments),
               });
             } catch (e) {
-              process.stderr.write(`[AI-TOOL] Failed to parse native tool arguments: ${tc.arguments}\n`);
+              this.logger.warn(`Failed to parse native tool arguments: ${tc.arguments}`);
             }
           }
         } else if (!useNativeTools && roundContent) {
@@ -350,12 +359,12 @@ Then after getting results, output another tool block with the page ID.`,
                 toolCallsToExecute.push(parsed);
               }
             } catch (e) {
-              process.stderr.write(`[AI-TOOL] Failed to parse tool block: ${match[1]}\n`);
+              this.logger.warn(`Failed to parse tool block: ${match[1]}`);
             }
           }
         }
 
-        process.stderr.write(`[AI-TOOL] Round ${round}: found ${toolCallsToExecute.length} tool calls (native: ${useNativeTools})\n`);
+        this.logger.debug(`Round ${round}: found ${toolCallsToExecute.length} tool calls (native: ${useNativeTools})`);
 
         if (toolCallsToExecute.length === 0) {
           // No tool calls found, we're done
@@ -376,9 +385,10 @@ Then after getting results, output another tool block with the page ID.`,
               tc.params,
               user,
               workspace.id,
+              toolCallId,
             );
           } catch (err: any) {
-            process.stderr.write(`[AI-TOOL] Error executing ${tc.action}: ${err.message}\n`);
+            this.logger.error(`Error executing ${tc.action}: ${err.message}`, err.stack);
             result = { tool_call_id: toolCallId, name: tc.action, result: `Error: ${err.message}` };
           }
 

@@ -28,6 +28,7 @@ export function useChatStream(
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isRetryable, setIsRetryable] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const isStreamingRef = useRef(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const currentChatIdRef = useRef(chatId);
@@ -50,6 +51,13 @@ export function useChatStream(
     setIsRetryable(false);
   }, [chatId]);
 
+  // Abort in-flight stream on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const hydrateFromServer = useCallback((msgs: AiChatMessage[]) => {
     const forId = currentChatIdRef.current;
     if (!forId) return;
@@ -60,12 +68,13 @@ export function useChatStream(
 
   const sendMessage = useCallback(
     (content: string, mentions: PageMention[] = [], attachments: ChatAttachment[] = [], contextPageId?: string, contextPages?: PageMention[], selectedText?: string) => {
-      if (isStreaming || (!content.trim() && attachments.length === 0)) return;
+      if (isStreamingRef.current || (!content.trim() && attachments.length === 0)) return;
 
       setError(null);
       setErrorCode(null);
       setIsRetryable(false);
       setIsStreaming(true);
+      isStreamingRef.current = true;
       setStreamingContent("");
       setStreamingToolCalls([]);
 
@@ -169,6 +178,7 @@ export function useChatStream(
                 return "";
               });
               setIsStreaming(false);
+              isStreamingRef.current = false;
               queryClient.invalidateQueries({
                 queryKey: ["ai-chat", currentChatIdRef.current],
               });
@@ -184,21 +194,24 @@ export function useChatStream(
               setErrorCode(event.code || null);
               setIsRetryable(event.retryable || false);
               setIsStreaming(false);
+              isStreamingRef.current = false;
               break;
           }
         },
         (errorMsg) => {
           setError(errorMsg);
           setIsStreaming(false);
+          isStreamingRef.current = false;
         },
         () => {
           setIsStreaming(false);
+          isStreamingRef.current = false;
         },
       );
 
       abortRef.current = abortController;
     },
-    [isStreaming, navigate, queryClient],
+    [navigate, queryClient, options],
   );
 
   const stopGeneration = useCallback(() => {
@@ -225,7 +238,38 @@ export function useChatStream(
     });
 
     setIsStreaming(false);
+    isStreamingRef.current = false;
   }, []);
+
+  const regenerate = useCallback(() => {
+    if (isStreamingRef.current) return;
+
+    // Find the last user message
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx === -1) return;
+
+    const lastUserMsg = messages[lastUserIdx];
+    // Truncate messages to before the last user message
+    setMessages(prev => prev.slice(0, lastUserIdx));
+
+    // Clear any error state
+    setError(null);
+    setErrorCode(null);
+    setIsRetryable(false);
+
+    // Re-send with original content (strip any appended context)
+    const rawContent = (lastUserMsg.content || '').replace(
+      /\n\n<referenced_pages>[\s\S]*<\/referenced_pages>$/,
+      '',
+    );
+    sendMessage(rawContent);
+  }, [messages, sendMessage]);
 
   return {
     messages,
@@ -237,6 +281,7 @@ export function useChatStream(
     isRetryable,
     sendMessage,
     stopGeneration,
+    regenerate,
     hydrateFromServer,
   };
 }

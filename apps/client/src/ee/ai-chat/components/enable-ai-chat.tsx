@@ -43,7 +43,7 @@ function AiChatToggle() {
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.currentTarget.checked;
     try {
-      const updatedWorkspace = await updateWorkspace({ aiChat: value } as any);
+      const updatedWorkspace = await updateWorkspace({ settings: { ai: { chat: value } } });
       setChecked(value);
       setWorkspace(updatedWorkspace);
     } catch (err: any) {
@@ -57,7 +57,7 @@ function AiChatToggle() {
   return (
     <Tooltip label={upgradeLabel} disabled={hasAccess} refProp="rootRef">
       <Switch
-        defaultChecked={checked}
+        checked={checked}
         onChange={handleChange}
         disabled={!hasAccess}
         aria-label={t("Toggle AI Chat")}

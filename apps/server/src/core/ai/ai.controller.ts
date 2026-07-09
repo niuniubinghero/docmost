@@ -7,6 +7,11 @@ import {
   Res,
 } from '@nestjs/common';
 import { UseGuards } from '@nestjs/common';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import {
+  AI_CHAT_THROTTLER,
+  AUTH_THROTTLER,
+} from '../../integrations/throttle/throttler-names';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
@@ -54,13 +59,19 @@ const ACTION_SYSTEM_PROMPTS: Record<AiAction, string> = {
     'You are a helpful AI assistant. Follow the user\'s instructions precisely. Return ONLY the requested output without explanations, notes, or commentary unless specifically asked for.',
 };
 
-@UseGuards(JwtAuthGuard)
+@SkipThrottle({ [AUTH_THROTTLER]: true })
+@Throttle({ [AI_CHAT_THROTTLER]: { limit: 25, ttl: 60000 } })
+@UseGuards(JwtAuthGuard, ThrottlerGuard)
 @Controller('ai')
 export class AiController {
   constructor(
     private aiService: AiService,
     private aiProviderRepo: AiProviderRepo,
   ) {}
+
+  private sanitizePrompt(prompt: string, maxLength = 200): string {
+    return prompt.substring(0, maxLength).replace(/[`\$\\]/g, '');
+  }
 
   @HttpCode(HttpStatus.OK)
   @Post('generate')
@@ -73,11 +84,13 @@ export class AiController {
     let systemPrompt = ACTION_SYSTEM_PROMPTS[action];
 
     if (action === AiAction.CHANGE_TONE && body.prompt) {
-      systemPrompt = `You are a tone adjustment assistant. Change the tone of the text to be ${body.prompt} while preserving the meaning.`;
+      const safePrompt = this.sanitizePrompt(body.prompt);
+      systemPrompt = `You are a tone adjustment assistant. Change the tone of the text to be ${safePrompt} while preserving the meaning.`;
     } else if (action === AiAction.TRANSLATE && body.prompt) {
-      systemPrompt = `You are a professional translator. Translate the text to ${body.prompt}. Maintain the original meaning and tone.`;
+      const safePrompt = this.sanitizePrompt(body.prompt);
+      systemPrompt = `You are a professional translator. Translate the text to ${safePrompt}. Maintain the original meaning and tone.`;
     } else if (action === AiAction.CUSTOM && body.prompt) {
-      systemPrompt = body.prompt;
+      systemPrompt = this.sanitizePrompt(body.prompt, 500);
     }
 
     const messages: AiChatMessage[] = [
@@ -117,11 +130,13 @@ export class AiController {
     let systemPrompt = ACTION_SYSTEM_PROMPTS[action];
 
     if (action === AiAction.CHANGE_TONE && body.prompt) {
-      systemPrompt = `You are a tone adjustment assistant. Change the tone of the text to be ${body.prompt} while preserving the meaning.`;
+      const safePrompt = this.sanitizePrompt(body.prompt);
+      systemPrompt = `You are a tone adjustment assistant. Change the tone of the text to be ${safePrompt} while preserving the meaning.`;
     } else if (action === AiAction.TRANSLATE && body.prompt) {
-      systemPrompt = `You are a professional translator. Translate the text to ${body.prompt}. Maintain the original meaning and tone.`;
+      const safePrompt = this.sanitizePrompt(body.prompt);
+      systemPrompt = `You are a professional translator. Translate the text to ${safePrompt}. Maintain the original meaning and tone.`;
     } else if (action === AiAction.CUSTOM && body.prompt) {
-      systemPrompt = body.prompt;
+      systemPrompt = this.sanitizePrompt(body.prompt, 500);
     }
 
     const messages: AiChatMessage[] = [
@@ -240,17 +255,25 @@ export class AiController {
       return;
     }
 
-    const stream = this.aiService.chatStream(body.messages, {
-      provider,
-      model: body.model,
-    });
+    try {
+      const stream = this.aiService.chatStream(body.messages, {
+        provider,
+        model: body.model,
+      });
 
-    for await (const chunk of stream) {
-      res.raw.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+      for await (const chunk of stream) {
+        res.raw.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+      }
+
+      res.raw.write('data: [DONE]\n\n');
+      res.raw.end();
+    } catch (error: any) {
+      res.raw.write(
+        `data: ${JSON.stringify({ error: error.message })}\n\n`,
+      );
+      res.raw.write('data: [DONE]\n\n');
+      res.raw.end();
     }
-
-    res.raw.write('data: [DONE]\n\n');
-    res.raw.end();
   }
 
   @HttpCode(HttpStatus.OK)

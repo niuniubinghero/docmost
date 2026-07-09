@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ActionIcon, Popover, Tooltip, UnstyledButton } from "@mantine/core";
+import { ActionIcon, Popover, Tooltip, UnstyledButton, Button, Text } from "@mantine/core";
 import {
   IconPlus,
   IconChevronDown,
@@ -9,6 +9,13 @@ import {
   IconFileText,
   IconLanguage,
   IconSearch,
+  IconRefresh,
+  IconWifiOff,
+  IconLock,
+  IconClock,
+  IconSettings,
+  IconServer,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
 import { useAtom, useAtomValue } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
@@ -25,6 +32,34 @@ import ChatInput from "./chat-input";
 import AsideChatHistory from "./aside-chat-history";
 import type { ChatAttachment, PageMention } from "../types/ai-chat.types";
 import classes from "../styles/aside-chat-panel.module.css";
+
+type ErrorCategory = 'network' | 'auth' | 'rate_limit' | 'server' | 'config' | 'unknown';
+
+function classifyError(errorCode: string | null, error: string | null): ErrorCategory {
+  if (!errorCode && error?.toLowerCase().includes('fetch')) return 'network';
+  switch (errorCode) {
+    case 'TIMEOUT': return 'network';
+    case 'AUTH_ERROR': return 'auth';
+    case 'RATE_LIMIT': return 'rate_limit';
+    case 'NO_PROVIDER':
+    case 'MODEL_NOT_FOUND': return 'config';
+    case 'PROVIDER_ERROR':
+    case 'INTERNAL_ERROR': return 'server';
+    default: return 'unknown';
+  }
+}
+
+const ERROR_CONFIG: Record<ErrorCategory, {
+  icon: React.ComponentType<{ size?: number | string }>;
+  titleKey: string;
+}> = {
+  network:     { icon: IconWifiOff,      titleKey: 'Connection error' },
+  auth:        { icon: IconLock,         titleKey: 'Authentication required' },
+  rate_limit:  { icon: IconClock,        titleKey: 'Rate limit reached' },
+  server:      { icon: IconServer,       titleKey: 'Server error' },
+  config:      { icon: IconSettings,     titleKey: 'Configuration error' },
+  unknown:     { icon: IconAlertTriangle, titleKey: 'Something went wrong' },
+};
 
 type QuickAction = {
   icon: React.ReactNode;
@@ -55,8 +90,11 @@ export default function AsideChatPanel({ editor }: AsideChatPanelProps) {
     streamingToolCalls,
     isStreaming,
     error,
+    errorCode,
+    isRetryable,
     sendMessage,
     stopGeneration,
+    regenerate,
     hydrateFromServer,
   } = useChatStream(chatId, {
     onChatCreated: (newChatId) => {
@@ -222,13 +260,36 @@ export default function AsideChatPanel({ editor }: AsideChatPanelProps) {
         </Tooltip>
       </div>
 
-      {error && (
-        <div className={classes.errorBanner}>
-          <div className={classes.errorContent}>
-            {error}
+{error && (() => {
+        const category = classifyError(errorCode, error);
+        const config = ERROR_CONFIG[category];
+        const IconComponent = config.icon;
+        return (
+          <div className={classes.errorBanner} data-error-category={category}>
+            <div className={classes.errorIcon}>
+              <IconComponent size={14} />
+            </div>
+            <div className={classes.errorContent}>
+              <Text size="xs" fw={500}>{t(config.titleKey)}</Text>
+              <Text size="xs" c="dimmed" mt={2}>{error}</Text>
+              {isRetryable && (
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  leftSection={<IconRefresh size={12} />}
+                  onClick={() => {
+                    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+                    if (lastUserMsg?.content) sendMessage(lastUserMsg.content);
+                  }}
+                  mt="xs"
+                >
+                  {t("Retry")}
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {hasMessages ? (
         <>
@@ -238,6 +299,7 @@ export default function AsideChatPanel({ editor }: AsideChatPanelProps) {
               isStreaming={isStreaming}
               streamingContent={streamingContent}
               streamingToolCalls={streamingToolCalls}
+              onRegenerate={regenerate}
             />
           </div>
         </>

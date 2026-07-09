@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 type ShortcutHandlers = {
   onCtrlK?: () => void;
@@ -7,23 +7,23 @@ type ShortcutHandlers = {
 };
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "k") {
           e.preventDefault();
-          handlers.onCtrlK?.();
+          handlersRef.current.onCtrlK?.();
         }
       }
       if (e.key === "Escape") {
-        handlers.onEscape?.();
+        handlersRef.current.onEscape?.();
       }
-    },
-    [handlers]
-  );
+    };
 
-  useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  }, []);
 }

@@ -43,3 +43,16 @@ export async function testAiProviderConnection(
   const req = await api.post("/ai-providers/test", { providerId });
   return req.data;
 }
+
+export async function fetchProviderModels(
+  type: string,
+  apiKey?: string,
+  baseUrl?: string,
+): Promise<{ models: string[] }> {
+  const req = await api.post("/ai-providers/models", {
+    type,
+    apiKey,
+    baseUrl,
+  });
+  return req.data;
+}

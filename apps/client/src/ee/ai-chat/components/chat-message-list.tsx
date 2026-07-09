@@ -23,6 +23,7 @@ type Props = {
   isStreaming: boolean;
   streamingContent: string;
   streamingToolCalls: AiChatToolCall[];
+  onRegenerate?: () => void;
 };
 
 const BOTTOM_THRESHOLD_PX = 32;
@@ -35,6 +36,7 @@ export default function ChatMessageList({
   isStreaming,
   streamingContent,
   streamingToolCalls,
+  onRegenerate,
 }: Props) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -224,7 +226,15 @@ export default function ChatMessageList({
                   <ErrorBoundary
                     fallback={<ChatMessageErrorFallback />}
                   >
-                    <ChatMessage message={item.data} />
+                    <ChatMessage
+                      message={item.data}
+                      isLastAssistant={
+                        !isStreaming &&
+                        item.data.role === 'assistant' &&
+                        item.data.id === messages[messages.length - 1]?.id
+                      }
+                      onRegenerate={onRegenerate}
+                    />
                   </ErrorBoundary>
                 ) : (
                   <ErrorBoundary

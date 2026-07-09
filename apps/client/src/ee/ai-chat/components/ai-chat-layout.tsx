@@ -8,10 +8,39 @@ import ChatEmptyState from "./chat-empty-state";
 import ChatInput from "./chat-input";
 import ChatSkeleton from "./chat-skeleton";
 import { Button, Group, Text } from "@mantine/core";
-import { IconRefresh, IconAlertTriangle } from "@tabler/icons-react";
+import { IconRefresh, IconAlertTriangle, IconWifiOff, IconLock, IconClock, IconSettings, IconServer } from "@tabler/icons-react";
+import type { PageMention, ChatAttachment } from "../types/ai-chat.types";
 import type { HomeAiPromptInitialState } from "@/features/home/components/home-ai-prompt";
 import { useTranslation } from "react-i18next";
 import classes from "../styles/ai-chat.module.css";
+
+type ErrorCategory = 'network' | 'auth' | 'rate_limit' | 'server' | 'config' | 'unknown';
+
+function classifyError(errorCode: string | null, error: string | null): ErrorCategory {
+  if (!errorCode && error?.toLowerCase().includes('fetch')) return 'network';
+  switch (errorCode) {
+    case 'TIMEOUT': return 'network';
+    case 'AUTH_ERROR': return 'auth';
+    case 'RATE_LIMIT': return 'rate_limit';
+    case 'NO_PROVIDER':
+    case 'MODEL_NOT_FOUND': return 'config';
+    case 'PROVIDER_ERROR':
+    case 'INTERNAL_ERROR': return 'server';
+    default: return 'unknown';
+  }
+}
+
+const ERROR_CONFIG: Record<ErrorCategory, {
+  icon: React.ComponentType<{ size?: number | string }>;
+  titleKey: string;
+}> = {
+  network:     { icon: IconWifiOff,      titleKey: 'Connection error' },
+  auth:        { icon: IconLock,         titleKey: 'Authentication required' },
+  rate_limit:  { icon: IconClock,        titleKey: 'Rate limit reached' },
+  server:      { icon: IconServer,       titleKey: 'Server error' },
+  config:      { icon: IconSettings,     titleKey: 'Configuration error' },
+  unknown:     { icon: IconAlertTriangle, titleKey: 'Something went wrong' },
+};
 
 export default function AiChatLayout() {
   const { chatId } = useParams<{ chatId: string }>();
@@ -35,8 +64,11 @@ export default function AiChatLayout() {
     streamingToolCalls,
     isStreaming,
     error,
+    errorCode,
+    isRetryable,
     sendMessage,
     stopGeneration,
+    regenerate,
     hydrateFromServer,
   } = useChatStream(chatId);
 
@@ -65,7 +97,7 @@ export default function AiChatLayout() {
 
   // Wrap sendMessage to track last message for retry
   const sendMessageWithTracking = useCallback(
-    (content: string, mentions?: any[], attachments?: any[]) => {
+    (content: string, mentions?: PageMention[], attachments?: ChatAttachment[]) => {
       lastMessageRef.current = content;
       sendMessage(content, mentions ?? [], attachments ?? []);
     },
@@ -110,32 +142,40 @@ export default function AiChatLayout() {
             isStreaming={isStreaming}
             streamingContent={streamingContent}
             streamingToolCalls={streamingToolCalls}
+            onRegenerate={regenerate}
           />
-          {error && (
-            <div className={classes.errorMessage} role="alert">
-              <div className={classes.errorIcon}>
-                <IconAlertTriangle size={16} />
+          {error && (() => {
+            const category = classifyError(errorCode, error);
+            const config = ERROR_CONFIG[category];
+            const IconComponent = config.icon;
+            return (
+              <div
+                className={classes.errorMessage}
+                role="alert"
+                data-error-category={category}
+              >
+                <div className={classes.errorIcon}>
+                  <IconComponent size={16} />
+                </div>
+                <div className={classes.errorContent}>
+                  <Text size="sm" fw={500}>{t(config.titleKey)}</Text>
+                  <Text size="sm" c="dimmed" mt={2}>{error}</Text>
+                  {isRetryable && lastMessageRef.current && (
+                    <Group gap="xs" mt="xs">
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        leftSection={<IconRefresh size={12} />}
+                        onClick={() => sendMessage(lastMessageRef.current)}
+                      >
+                        {t("Retry")}
+                      </Button>
+                    </Group>
+                  )}
+                </div>
               </div>
-              <div className={classes.errorContent}>
-                <Text size="sm" c="dimmed">{error}</Text>
-                <Group gap="xs" mt="xs">
-                  <Button
-                    variant="subtle"
-                    size="xs"
-                    leftSection={<IconRefresh size={12} />}
-                    onClick={() => {
-                      // Retry with the last message
-                      if (lastMessageRef.current) {
-                        sendMessage(lastMessageRef.current);
-                      }
-                    }}
-                  >
-                    {t("Retry")}
-                  </Button>
-                </Group>
-              </div>
-            </div>
-          )}
+            );
+          })()}
           <div className={classes.inputArea}>
             <ChatInput
               isStreaming={isStreaming}

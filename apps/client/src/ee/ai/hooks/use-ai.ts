@@ -7,6 +7,8 @@ export function useAiStream() {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const mutation = useAiGenerateStreamMutation();
+  const mutationRef = useRef(mutation);
+  mutationRef.current = mutation;
 
   const startStream = useCallback(
     async (data: AiGenerateDto) => {
@@ -14,7 +16,7 @@ export function useAiStream() {
       setIsStreaming(true);
 
       try {
-        const controller = await mutation.mutateAsync({
+        const controller = await mutationRef.current.mutateAsync({
           ...data,
           onChunk: (chunk) => {
             setContent((prev) => prev + chunk.content);
@@ -34,7 +36,7 @@ export function useAiStream() {
         setIsStreaming(false);
       }
     },
-    [mutation]
+    []
   );
 
   const stopStream = useCallback(() => {

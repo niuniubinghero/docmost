@@ -165,14 +165,19 @@ export class AiChatRepo {
       .executeTakeFirst();
   }
 
+  private escapeLikePattern(pattern: string): string {
+    return pattern.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  }
+
   async searchChats(workspaceId: string, userId: string, query: string): Promise<AiChat[]> {
+    const safeQuery = this.escapeLikePattern(query);
     return this.db
       .selectFrom('aiChats')
       .select(this.chatFields)
       .where('workspaceId', '=', workspaceId)
       .where('creatorId', '=', userId)
       .where('deletedAt', 'is', null)
-      .where('title', 'ilike', `%${query}%`)
+      .where('title', 'ilike', `%${safeQuery}%`)
       .orderBy('updatedAt', 'desc')
       .limit(20)
       .execute();

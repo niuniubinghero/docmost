@@ -19,7 +19,7 @@ export default function EnableGenerativeAi() {
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.currentTarget.checked;
     try {
-      const updatedWorkspace = await updateWorkspace({ generativeAi: value });
+      const updatedWorkspace = await updateWorkspace({ settings: { ai: { generative: value } } });
       setChecked(value);
       setWorkspace(updatedWorkspace);
     } catch (err) {
@@ -43,7 +43,7 @@ export default function EnableGenerativeAi() {
 
       <Tooltip label={upgradeLabel} disabled={hasAccess} refProp="rootRef">
         <Switch
-          defaultChecked={checked}
+          checked={checked}
           onChange={handleChange}
           disabled={!hasAccess}
         />

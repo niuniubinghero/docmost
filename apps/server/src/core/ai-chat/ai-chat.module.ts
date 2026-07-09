@@ -15,6 +15,7 @@ import { TransclusionModule } from '../page/transclusion/transclusion.module';
 import { StorageModule } from '../../integrations/storage/storage.module';
 import { EnvironmentModule } from '../../integrations/environment/environment.module';
 import { LabelModule } from '../label/label.module';
+import { WebhookModule } from '../webhook/webhook.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { LabelModule } from '../label/label.module';
       imports: [EnvironmentModule],
     }),
     LabelModule,
+    WebhookModule,
   ],
   controllers: [AiChatController],
   providers: [

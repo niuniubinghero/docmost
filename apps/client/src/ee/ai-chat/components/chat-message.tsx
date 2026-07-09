@@ -10,20 +10,17 @@ import {
   IconPhoto,
   IconFileText,
   IconSparkles,
-  IconRefresh,
   IconEdit,
-  IconDots,
   IconArrowDown,
   IconArrowUp,
   IconReplace,
+  IconRefresh,
 } from "@tabler/icons-react";
-import { markdownToHtml } from "@docmost/editor-ext";
-import { CopyButton } from "@/components/common/copy-button";
 import type { AiChatMessage, AiChatToolCall } from "../types/ai-chat.types";
 import ChatToolGroup from "./chat-tool-group";
 import { useApplyToEditor, type ApplyOperation } from "../hooks/use-apply-to-editor";
 import classes from "../styles/chat-message.module.css";
-import CopyTextButton from "@/components/common/copy.tsx";
+import { markdownToHtml } from "@docmost/editor-ext";
 
 const PAGE_PATH_RE = /\/s\/[^/?#]+\/p\/[^/?#]+/;
 
@@ -55,6 +52,8 @@ type Props = {
   isStreaming?: boolean;
   streamingContent?: string;
   streamingToolCalls?: AiChatToolCall[];
+  isLastAssistant?: boolean;
+  onRegenerate?: () => void;
 };
 
 export default function ChatMessage({
@@ -62,12 +61,23 @@ export default function ChatMessage({
   isStreaming,
   streamingContent,
   streamingToolCalls,
+  isLastAssistant,
+  onRegenerate,
 }: Props) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
   const { canApply, hasSelection, applyToEditor } = useApplyToEditor();
   const [applied, setApplied] = useState(false);
+  const timeoutRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Clean up all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(clearTimeout);
+      timeoutRefs.current = [];
+    };
+  }, []);
 
   // Process code blocks for syntax highlighting and copy buttons
   useEffect(() => {
@@ -118,9 +128,10 @@ export default function ChatMessage({
         copyBtn.onclick = async () => {
           await navigator.clipboard.writeText(codeEl.textContent || "");
           copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-          setTimeout(() => {
+          const tid = setTimeout(() => {
             copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
           }, 2000);
+          timeoutRefs.current.push(tid);
         };
 
         header.appendChild(copyBtn);
@@ -173,7 +184,8 @@ export default function ChatMessage({
       const success = applyToEditor(message.content, operation);
       if (success) {
         setApplied(true);
-        setTimeout(() => setApplied(false), 2000);
+        const tid = setTimeout(() => setApplied(false), 2000);
+        timeoutRefs.current.push(tid);
       }
     },
     [message.content, applyToEditor],
@@ -297,18 +309,18 @@ export default function ChatMessage({
                 <IconCopy size={14} />
               </ActionIcon>
             </Tooltip>
-            <Tooltip label={t("Regenerate")}>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                onClick={() => {
-                  // TODO: Implement regenerate functionality
-                }}
-              >
-                <IconRefresh size={14} />
-              </ActionIcon>
-            </Tooltip>
+            {isLastAssistant && onRegenerate && (
+              <Tooltip label={t("Regenerate")}>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  onClick={onRegenerate}
+                >
+                  <IconRefresh size={14} />
+                </ActionIcon>
+              </Tooltip>
+            )}
             {canApply && (
               <Menu withinPortal position="bottom-start" withArrow>
                 <Menu.Target>

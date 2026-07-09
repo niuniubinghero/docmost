@@ -179,14 +179,65 @@
 
 .errorBanner {
   padding: 0 var(--mantine-spacing-sm);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  margin-top: 10px;
+  color: var(--mantine-color-red-6);
 }
 
 .errorContent {
+  flex: 1;
   padding: 8px 12px;
-  color: light-dark(var(--mantine-color-red-7), var(--mantine-color-red-4));
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-4));
   font-size: var(--mantine-font-size-xs);
   border-radius: var(--mantine-radius-sm);
   background: light-dark(var(--mantine-color-red-0), rgba(239, 68, 68, 0.1));
   border: 1px solid light-dark(var(--mantine-color-red-2), rgba(239, 68, 68, 0.2));
   line-height: 1.4;
+}
+
+/* Error category color variants for aside panel */
+.errorBanner[data-error-category="network"] .errorContent {
+  background: light-dark(var(--mantine-color-orange-0), rgba(255, 165, 0, 0.15));
+  border-color: light-dark(var(--mantine-color-orange-3), var(--mantine-color-orange-8));
+}
+.errorBanner[data-error-category="network"] .errorIcon {
+  color: var(--mantine-color-orange-6);
+}
+
+.errorBanner[data-error-category="auth"] .errorContent {
+  background: light-dark(var(--mantine-color-red-0), var(--mantine-color-red-9));
+  border-color: light-dark(var(--mantine-color-red-4), var(--mantine-color-red-7));
+}
+.errorBanner[data-error-category="auth"] .errorIcon {
+  color: var(--mantine-color-red-6);
+}
+
+.errorBanner[data-error-category="rate_limit"] .errorContent {
+  background: light-dark(var(--mantine-color-yellow-0), rgba(255, 200, 0, 0.15));
+  border-color: light-dark(var(--mantine-color-yellow-3), var(--mantine-color-yellow-8));
+}
+.errorBanner[data-error-category="rate_limit"] .errorIcon {
+  color: var(--mantine-color-yellow-6);
+}
+
+.errorBanner[data-error-category="config"] .errorContent {
+  background: light-dark(var(--mantine-color-blue-0), rgba(0, 100, 255, 0.15));
+  border-color: light-dark(var(--mantine-color-blue-3), var(--mantine-color-blue-8));
+}
+.errorBanner[data-error-category="config"] .errorIcon {
+  color: var(--mantine-color-blue-6);
+}
+
+.errorBanner[data-error-category="server"] .errorContent {
+  background: light-dark(var(--mantine-color-red-0), var(--mantine-color-red-9));
+  border-color: light-dark(var(--mantine-color-red-3), var(--mantine-color-red-8));
+}
+.errorBanner[data-error-category="server"] .errorIcon {
+  color: var(--mantine-color-red-6);
 }

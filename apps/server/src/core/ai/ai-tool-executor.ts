@@ -3,6 +3,7 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PageService } from '../page/services/page.service';
+import { CreatePageDto } from '../page/dto/create-page.dto';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { User } from '@docmost/db/types/entity.types';
 import { AiToolResult } from './ai-tools';
@@ -23,6 +24,7 @@ export class AiToolExecutor {
     args: Record<string, any>,
     user: User,
     workspaceId: string,
+    toolCallId?: string,
   ): Promise<AiToolResult> {
     try {
       let result: string;
@@ -37,6 +39,7 @@ export class AiToolExecutor {
             args.content,
             args.operation,
             user,
+            workspaceId,
           );
           break;
         case 'search_pages':
@@ -56,14 +59,14 @@ export class AiToolExecutor {
       }
 
       return {
-        tool_call_id: '',
+        tool_call_id: toolCallId || '',
         name,
         result,
       };
     } catch (error: any) {
       this.logger.error(`Tool execution error: ${error.message}`);
       return {
-        tool_call_id: '',
+        tool_call_id: toolCallId || '',
         name,
         result: `Error executing ${name}: ${error.message}`,
       };
@@ -94,7 +97,17 @@ export class AiToolExecutor {
     content: string,
     operation: 'append' | 'prepend' | 'replace',
     user: User,
+    workspaceId: string,
   ): Promise<string> {
+    // Verify page belongs to workspace before updating
+    const page = await this.pageRepo.findById(pageId);
+    if (!page) {
+      return `Page not found with ID: ${pageId}`;
+    }
+    if (page.workspaceId !== workspaceId) {
+      return `Access denied: page does not belong to this workspace`;
+    }
+
     await this.pageService.updatePageContent(
       pageId,
       content,
@@ -106,7 +119,12 @@ export class AiToolExecutor {
     return `Successfully ${operation === 'replace' ? 'replaced' : operation === 'append' ? 'appended to' : 'prepended to'} page content.`;
   }
 
+  private escapeLikePattern(pattern: string): string {
+    return pattern.replace(/%/g, '\\%').replace(/_/g, '\\_');
+  }
+
   private async searchPages(query: string, workspaceId: string): Promise<string> {
+    const safeQuery = this.escapeLikePattern(query);
     const pages = await this.db
       .selectFrom('pages')
       .select(['id', 'title', 'textContent'])
@@ -114,8 +132,8 @@ export class AiToolExecutor {
       .where('deletedAt', 'is', null)
       .where((eb) =>
         eb.or([
-          eb('title', 'ilike', `%${query}%`),
-          eb('textContent', 'ilike', `%${query}%`),
+          eb('title', 'ilike', `%${safeQuery}%`),
+          eb('textContent', 'ilike', `%${safeQuery}%`),
         ])
       )
       .limit(5)
@@ -146,16 +164,12 @@ export class AiToolExecutor {
       return `Space not found or access denied`;
     }
 
-    const createPageDto: any = {
+    const createPageDto: CreatePageDto = {
       title,
       spaceId,
       icon: '📄',
+      ...(content ? { content, format: 'markdown' as const } : {}),
     };
-
-    if (content) {
-      createPageDto.content = content;
-      createPageDto.format = 'markdown';
-    }
 
     const page = await this.pageService.create(
       user.id,
