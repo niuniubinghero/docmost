@@ -39,4 +39,14 @@ export class AuditLogRepo {
       .values(auditLog)
       .executeTakeFirst();
   }
+
+  async deleteOlderThan(workspaceId: string, cutoffDate: Date): Promise<number> {
+    const result = await this.db
+      .deleteFrom('audit')
+      .where('workspaceId', '=', workspaceId)
+      .where('createdAt', '<', cutoffDate)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows || 0);
+  }
 }

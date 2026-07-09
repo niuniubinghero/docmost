@@ -4,6 +4,7 @@ import { CreateApiKeyDto } from './dto/api-key.dto';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import { IAuditService, AUDIT_SERVICE } from '../../integrations/audit/audit.service';
 import { Inject } from '@nestjs/common';
+import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 
 @Injectable()
 export class ApiKeyService {
@@ -12,8 +13,8 @@ export class ApiKeyService {
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
-  async getApiKeys(workspaceId: string) {
-    return this.apiKeyRepo.findByWorkspace(workspaceId);
+  async getApiKeys(workspaceId: string, pagination: PaginationOptions) {
+    return this.apiKeyRepo.findByWorkspace(workspaceId, pagination);
   }
 
   async createApiKey(
@@ -26,21 +27,23 @@ export class ApiKeyService {
       creatorId: userId,
       workspaceId,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+      scopes: dto.scopes,
     });
 
     this.auditService.log({
       event: AuditEvent.API_KEY_CREATED,
       resourceType: AuditResource.API_KEY,
       resourceId: apiKey.id,
+      metadata: { scopes: dto.scopes },
     });
 
-    return { apiKey, rawKey };
+    return { ...apiKey, token: rawKey };
   }
 
   async updateApiKey(
     keyId: string,
     workspaceId: string,
-    data: { name?: string },
+    data: { name?: string; scopes?: string[] },
   ) {
     const apiKey = await this.apiKeyRepo.findById(keyId, workspaceId);
     if (!apiKey) {
@@ -48,6 +51,13 @@ export class ApiKeyService {
     }
 
     await this.apiKeyRepo.update(keyId, workspaceId, data);
+
+    this.auditService.log({
+      event: AuditEvent.API_KEY_UPDATED,
+      resourceType: AuditResource.API_KEY,
+      resourceId: keyId,
+      metadata: { name: data.name, scopes: data.scopes },
+    });
 
     return this.apiKeyRepo.findById(keyId, workspaceId);
   }
@@ -61,7 +71,7 @@ export class ApiKeyService {
     await this.apiKeyRepo.revoke(keyId, workspaceId);
 
     this.auditService.log({
-      event: AuditEvent.API_KEY_DELETED,
+      event: AuditEvent.API_KEY_REVOKED,
       resourceType: AuditResource.API_KEY,
       resourceId: keyId,
     });

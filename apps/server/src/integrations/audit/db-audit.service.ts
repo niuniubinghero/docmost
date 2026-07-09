@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AuditLogPayload, ActorType } from '../../common/events/audit-events';
 import { AuditLogRepo } from '@docmost/db/repos/audit-log/audit-log.repo';
 import { ClsService } from 'nestjs-cls';
@@ -10,6 +10,8 @@ import { IAuditService } from './audit.service';
 
 @Injectable()
 export class DbAuditService implements IAuditService {
+  private readonly logger = new Logger(DbAuditService.name);
+
   constructor(
     private auditLogRepo: AuditLogRepo,
     private cls: ClsService,
@@ -64,9 +66,9 @@ export class DbAuditService implements IAuditService {
       ipAddress?: string;
     },
   ): Promise<void> {
-    for (const payload of payloads) {
-      await this.logWithContext(payload, context);
-    }
+    await Promise.all(
+      payloads.map((payload) => this.logWithContext(payload, context)),
+    );
   }
 
   setActorId(_actorId: string): void {
@@ -78,9 +80,15 @@ export class DbAuditService implements IAuditService {
   }
 
   async updateRetention(
-    _workspaceId: string,
-    _retentionDays: number,
+    workspaceId: string,
+    retentionDays: number,
   ): Promise<void> {
-    // Implementation for retention cleanup
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    const deleted = await this.auditLogRepo.deleteOlderThan(workspaceId, cutoffDate);
+    this.logger.log(
+      `Retention cleanup: deleted ${deleted} audit logs older than ${retentionDays} days for workspace ${workspaceId}`,
+    );
   }
 }

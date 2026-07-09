@@ -1,4 +1,4 @@
-import { ActionIcon, Group, Menu, Table, Text } from "@mantine/core";
+import { ActionIcon, Badge, Group, Menu, Table, Text } from "@mantine/core";
 import { IconDots, IconEdit, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { IApiKey } from "@/ee/api-key";
@@ -6,6 +6,12 @@ import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import React from "react";
 import NoTableResults from "@/components/common/no-table-results";
 import { formatLocalized, useDateFnsLocale } from "@/lib/date-locale.ts";
+
+const SCOPE_LABELS: Record<string, string> = {
+  "page:read": "页面读取",
+  "space:read": "空间读取",
+  "search:read": "搜索",
+};
 
 interface ApiKeyTableProps {
   apiKeys: IApiKey[];
@@ -42,6 +48,7 @@ export function ApiKeyTable({
           <Table.Tr>
             <Table.Th>{t("Name")}</Table.Th>
             {showUserColumn && <Table.Th>{t("User")}</Table.Th>}
+            <Table.Th>{t("权限")}</Table.Th>
             <Table.Th>{t("Last used")}</Table.Th>
             <Table.Th>{t("Expires")}</Table.Th>
             <Table.Th>{t("Created")}</Table.Th>
@@ -73,6 +80,22 @@ export function ApiKeyTable({
                     </Group>
                   </Table.Td>
                 )}
+
+                <Table.Td>
+                  {apiKey.scopes && apiKey.scopes.length > 0 ? (
+                    <Group gap="4" wrap="wrap">
+                      {apiKey.scopes.map((scope) => (
+                        <Badge key={scope} size="sm" variant="light" color="blue">
+                          {SCOPE_LABELS[scope] || scope}
+                        </Badge>
+                      ))}
+                    </Group>
+                  ) : (
+                    <Badge size="sm" variant="light" color="gray">
+                      {t("全部权限")}
+                    </Badge>
+                  )}
+                </Table.Td>
 
                 <Table.Td>
                   <Text fz="sm" style={{ whiteSpace: "nowrap" }}>
@@ -139,7 +162,7 @@ export function ApiKeyTable({
               </Table.Tr>
             ))
           ) : (
-            <NoTableResults colSpan={showUserColumn ? 6 : 5} />
+            <NoTableResults colSpan={showUserColumn ? 7 : 6} />
           )}
         </Table.Tbody>
       </Table>

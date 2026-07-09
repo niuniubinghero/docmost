@@ -9,15 +9,18 @@ export interface IApiKey {
   expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
-  creator: Partial<IUser>;
+  creator?: Partial<IUser>;
+  scopes?: string[] | null;
 }
 
 export interface ICreateApiKeyRequest {
   name: string;
   expiresAt?: string;
+  scopes?: string[] | null;
 }
 
 export interface IUpdateApiKeyRequest {
   apiKeyId: string;
   name: string;
+  scopes?: string[] | null;
 }

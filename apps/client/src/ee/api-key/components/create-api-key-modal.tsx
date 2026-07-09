@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Modal, TextInput, Button, Group, Stack, Select } from "@mantine/core";
+import { Modal, TextInput, Button, Group, Stack, Select, MultiSelect } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { zod4Resolver } from "mantine-form-zod-resolver";
 import { z } from "zod/v4";
@@ -7,6 +7,12 @@ import { useTranslation } from "react-i18next";
 import { useCreateApiKeyMutation } from "@/ee/api-key/queries/api-key-query";
 import { IconCalendar } from "@tabler/icons-react";
 import { IApiKey } from "@/ee/api-key";
+
+const SCOPE_OPTIONS = [
+  { value: "page:read", label: "页面读取" },
+  { value: "space:read", label: "空间读取" },
+  { value: "search:read", label: "搜索" },
+];
 
 const DateInput = lazy(() =>
   import("@mantine/dates").then((module) => ({
@@ -33,6 +39,7 @@ export function CreateApiKeyModal({
 }: CreateApiKeyModalProps) {
   const { t, i18n } = useTranslation();
   const [expirationOption, setExpirationOption] = useState<string>("30");
+  const [scopes, setScopes] = useState<string[]>([]);
   const createApiKeyMutation = useCreateApiKeyMutation();
 
   const form = useForm<FormValues>({
@@ -83,12 +90,14 @@ export function CreateApiKeyModal({
     const groupData = {
       name: data.name,
       expiresAt: getExpirationDate(),
+      scopes: scopes.length > 0 ? scopes : null,
     };
 
     try {
       const createdKey = await createApiKeyMutation.mutateAsync(groupData);
       onSuccess(createdKey);
       form.reset();
+      setScopes([]);
       onClose();
     } catch (err) {
       //
@@ -98,6 +107,7 @@ export function CreateApiKeyModal({
   const handleClose = () => {
     form.reset();
     setExpirationOption("30");
+    setScopes([]);
     onClose();
   };
 
@@ -138,6 +148,16 @@ export function CreateApiKeyModal({
               />
             </Suspense>
           )}
+
+          <MultiSelect
+            label={t("权限范围")}
+            description={t("不选则拥有全部权限")}
+            data={SCOPE_OPTIONS}
+            value={scopes}
+            onChange={setScopes}
+            clearable
+            searchable={false}
+          />
 
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={handleClose}>

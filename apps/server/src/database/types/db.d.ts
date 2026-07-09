@@ -38,6 +38,7 @@ export interface ApiKeys {
   keyHash: string | null;
   lastUsedAt: Timestamp | null;
   name: string | null;
+  scopes: string[] | null;
   updatedAt: Generated<Timestamp>;
   creatorId: string;
   workspaceId: string;
@@ -605,6 +606,29 @@ export interface UserSessions {
   createdAt: Generated<Timestamp>;
 }
 
+export interface Webhooks {
+  id: Generated<string>;
+  workspaceId: string;
+  url: string;
+  secret: string;
+  events: string[];
+  enabled: Generated<boolean>;
+  createdAt: Generated<Timestamp>;
+  updatedAt: Generated<Timestamp>;
+}
+
+export interface WebhookDeliveries {
+  id: Generated<string>;
+  webhookId: string;
+  event: string;
+  payload: Json;
+  statusCode: number | null;
+  responseBody: string | null;
+  attempt: Generated<number>;
+  status: string;
+  createdAt: Generated<Timestamp>;
+}
+
 export interface DB {
   aiChats: AiChats;
   aiChatMessages: AiChatMessages;
@@ -642,6 +666,8 @@ export interface DB {
   userSessions: UserSessions;
   userTokens: UserTokens;
   watchers: Watchers;
+  webhookDeliveries: WebhookDeliveries;
+  webhooks: Webhooks;
   workspaceInvitations: WorkspaceInvitations;
   workspaces: Workspaces;
 }

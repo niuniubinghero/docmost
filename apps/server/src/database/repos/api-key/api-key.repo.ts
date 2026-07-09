@@ -3,6 +3,12 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
 import { randomBytes, createHash } from 'node:crypto';
+import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
+import {
+  CursorPaginationResult,
+  executeWithCursorPagination,
+} from '@docmost/db/pagination/cursor-pagination';
+import { jsonObjectFrom } from 'kysely/helpers/postgres';
 
 export interface ApiKey {
   id: string;
@@ -14,6 +20,15 @@ export interface ApiKey {
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
+  scopes: string[] | null;
+}
+
+export interface ApiKeyWithCreator extends ApiKey {
+  creator: {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+  } | null;
 }
 
 export interface InsertableApiKey {
@@ -21,6 +36,7 @@ export interface InsertableApiKey {
   creatorId: string;
   workspaceId: string;
   expiresAt?: Date;
+  scopes?: string[] | null;
 }
 
 @Injectable()
@@ -36,6 +52,7 @@ export class ApiKeyRepo {
     'apiKeys.lastUsedAt',
     'apiKeys.createdAt',
     'apiKeys.updatedAt',
+    'apiKeys.scopes',
   ] as const;
 
   async findById(
@@ -53,14 +70,31 @@ export class ApiKeyRepo {
       .executeTakeFirst();
   }
 
-  async findByWorkspace(workspaceId: string): Promise<ApiKey[]> {
-    return this.db
+  async findByWorkspace(
+    workspaceId: string,
+    pagination: PaginationOptions,
+  ): Promise<CursorPaginationResult<ApiKeyWithCreator>> {
+    const query = this.db
       .selectFrom('apiKeys')
-      .select(this.baseFields)
-      .where('workspaceId', '=', workspaceId)
-      .where('deletedAt', 'is', null)
-      .orderBy('createdAt', 'desc')
-      .execute();
+      .selectAll('apiKeys')
+      .select((eb) =>
+        jsonObjectFrom(
+          eb
+            .selectFrom('users')
+            .select(['users.id', 'users.name', 'users.avatarUrl'])
+            .whereRef('users.id', '=', 'apiKeys.creatorId'),
+        ).as('creator'),
+      )
+      .where('apiKeys.workspaceId', '=', workspaceId)
+      .where('apiKeys.deletedAt', 'is', null);
+
+    return executeWithCursorPagination(query, {
+      perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [{ expression: 'apiKeys.id', direction: 'desc' }],
+      parseCursor: (cursor) => ({ id: cursor.id }),
+    });
   }
 
   async findByHash(keyHash: string): Promise<ApiKey> {
@@ -96,7 +130,7 @@ export class ApiKeyRepo {
   async update(
     keyId: string,
     workspaceId: string,
-    data: { name?: string },
+    data: { name?: string; scopes?: string[] | null },
     trx?: KyselyTransaction,
   ) {
     const db = dbOrTx(this.db, trx);

@@ -18,7 +18,11 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 
+@ApiTags('API Keys')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('api-keys')
 export class ApiKeyController {
@@ -27,15 +31,20 @@ export class ApiKeyController {
     private workspaceAbility: WorkspaceAbilityFactory,
   ) {}
 
+  @ApiOperation({ summary: '获取 API Keys 列表' })
+  @ApiResponse({ status: 200, description: '返回工作空间的 API Keys 列表' })
   @HttpCode(HttpStatus.OK)
   @Post()
   async getApiKeys(
+    @Body() pagination: PaginationOptions,
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.apiKeyService.getApiKeys(workspace.id);
+    return this.apiKeyService.getApiKeys(workspace.id, pagination);
   }
 
+  @ApiOperation({ summary: '创建 API Key' })
+  @ApiResponse({ status: 200, description: 'API Key 创建成功' })
   @HttpCode(HttpStatus.OK)
   @Post('create')
   async createApiKey(
@@ -43,16 +52,30 @@ export class ApiKeyController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.API)
+    ) {
+      throw new ForbiddenException();
+    }
+
     return this.apiKeyService.createApiKey(dto, workspace.id, user.id);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('update')
   async updateApiKey(
-    @Body() body: { apiKeyId: string; name?: string },
+    @Body() body: { apiKeyId: string; name?: string; scopes?: string[] },
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.API)
+    ) {
+      throw new ForbiddenException();
+    }
+
     return this.apiKeyService.updateApiKey(body.apiKeyId, workspace.id, body);
   }
 
