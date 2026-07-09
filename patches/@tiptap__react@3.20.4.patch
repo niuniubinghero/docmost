@@ -1,0 +1,19 @@
+diff --git a/package.json b/package.json
+index 4f8fe27fbc92f37b596b13f8a63a419b93723784..64068f0c0949c17fd5e06ce009f5a3b5cda56a8e 100644
+--- a/package.json
++++ b/package.json
+@@ -44,10 +44,10 @@
+     "use-sync-external-store": "^1.4.0"
+   },
+   "devDependencies": {
+-    "@types/react": "^19.0.0",
+-    "@types/react-dom": "^19.0.0",
+-    "react": "^19.0.0",
+-    "react-dom": "^19.0.0",
++    "@types/react": "^18.3.12",
++    "@types/react-dom": "^18.3.1",
++    "react": "^18.3.1",
++    "react-dom": "^18.3.1",
+     "@tiptap/core": "^3.20.4",
+     "@tiptap/pm": "^3.20.4"
+   },

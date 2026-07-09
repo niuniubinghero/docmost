@@ -32,5 +32,5 @@ export const useTrialEndAction = () => {
         }
       }
     }
-  }, [navigate]);
+  }, [navigate, pathname, isAdmin, trialDaysLeft]);
 };

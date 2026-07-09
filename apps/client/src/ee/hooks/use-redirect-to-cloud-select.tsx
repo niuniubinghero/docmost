@@ -16,5 +16,5 @@ export const useRedirectToCloudSelect = () => {
         navigate(APP_ROUTE.AUTH.SELECT_WORKSPACE);
       }
     }
-  }, [navigate]);
+  }, [navigate, pathname]);
 };
