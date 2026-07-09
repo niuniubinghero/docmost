@@ -23,6 +23,14 @@ export class EnvironmentService {
     return origin;
   }
 
+  getCorsAllowedOrigins(): string[] {
+    const raw = this.configService.get<string>('CORS_ALLOWED_ORIGINS', '');
+    return raw
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+  }
+
   isHttps(): boolean {
     const appUrl = this.configService.get<string>('APP_URL');
     try {

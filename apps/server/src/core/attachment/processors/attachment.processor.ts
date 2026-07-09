@@ -3,7 +3,7 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { AttachmentService } from '../services/attachment.service';
 import { AttachmentIndexService } from '../services/attachment-index.service';
-import { QueueJob, QueueName } from 'src/integrations/queue/constants';
+import { QueueJob, QueueName } from '../../../integrations/queue/constants';
 
 @Processor(QueueName.ATTACHMENT_QUEUE)
 export class AttachmentProcessor extends WorkerHost implements OnModuleDestroy {

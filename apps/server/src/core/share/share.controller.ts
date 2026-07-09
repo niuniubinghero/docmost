@@ -27,6 +27,12 @@ import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo'
 import { PageAccessService } from '../page/page-access/page-access.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import {
+  AI_CHAT_THROTTLER,
+  AUTH_THROTTLER,
+  PUBLIC_SHARE_THROTTLER,
+} from '../../integrations/throttle/throttler-names';
 import { ShareRepo } from '@docmost/db/repos/share/share.repo';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { LicenseCheckService } from '../../integrations/environment/license-check.service';
@@ -35,8 +41,12 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../integrations/audit/audit.service';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
-@UseGuards(JwtAuthGuard)
+@ApiTags('Shares')
+@ApiBearerAuth()
+@SkipThrottle({ [AUTH_THROTTLER]: true, [AI_CHAT_THROTTLER]: true })
+@UseGuards(JwtAuthGuard, ThrottlerGuard)
 @Controller('shares')
 export class ShareController {
   constructor(
@@ -49,6 +59,7 @@ export class ShareController {
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
+  @SkipThrottle({ [PUBLIC_SHARE_THROTTLER]: true })
   @HttpCode(HttpStatus.OK)
   @Post('/')
   async getShares(
@@ -59,6 +70,7 @@ export class ShareController {
   }
 
   @Public()
+  @Throttle({ [PUBLIC_SHARE_THROTTLER]: { limit: 30, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('/page-info')
   async getSharedPageInfo(
@@ -89,6 +101,7 @@ export class ShareController {
   }
 
   @Public()
+  @Throttle({ [PUBLIC_SHARE_THROTTLER]: { limit: 30, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getShare(@Body() dto: ShareIdDto) {
@@ -112,6 +125,7 @@ export class ShareController {
   }
 
   @Public()
+  @Throttle({ [PUBLIC_SHARE_THROTTLER]: { limit: 30, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('/transclusion/lookup')
   async transclusionLookup(
@@ -125,6 +139,7 @@ export class ShareController {
     );
   }
 
+  @SkipThrottle({ [PUBLIC_SHARE_THROTTLER]: true })
   @HttpCode(HttpStatus.OK)
   @Post('/for-page')
   async getShareForPage(
@@ -142,6 +157,7 @@ export class ShareController {
     return this.shareService.getShareForPage(page.id, workspace.id);
   }
 
+  @SkipThrottle({ [PUBLIC_SHARE_THROTTLER]: true })
   @HttpCode(HttpStatus.OK)
   @Post('create')
   async create(
@@ -156,8 +172,6 @@ export class ShareController {
     }
 
     // User must be able to edit the page to create a share
-    //TODO: i dont think this is neccessary if we prevent restricted pages from getting shared
-    // rather, use space level permission and workspace/space level sharing restriction
     await this.pageAccessService.validateCanEdit(page, user);
 
     // Prevent sharing restricted pages
@@ -197,6 +211,7 @@ export class ShareController {
     return share;
   }
 
+  @SkipThrottle({ [PUBLIC_SHARE_THROTTLER]: true })
   @HttpCode(HttpStatus.OK)
   @Post('update')
   async update(@Body() updateShareDto: UpdateShareDto, @AuthUser() user: User) {
@@ -217,6 +232,7 @@ export class ShareController {
     return this.shareService.updateShare(share.id, updateShareDto);
   }
 
+  @SkipThrottle({ [PUBLIC_SHARE_THROTTLER]: true })
   @HttpCode(HttpStatus.OK)
   @Post('delete')
   async delete(@Body() shareIdDto: ShareIdDto, @AuthUser() user: User) {
@@ -251,6 +267,7 @@ export class ShareController {
   }
 
   @Public()
+  @Throttle({ [PUBLIC_SHARE_THROTTLER]: { limit: 30, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @Post('/tree')
   async getSharePageTree(

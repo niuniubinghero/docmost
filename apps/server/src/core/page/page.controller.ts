@@ -25,7 +25,9 @@ import {
 import { PageHistoryService } from './services/page-history.service';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtOrApiKeyAuthGuard } from '../../common/guards/jwt-or-api-key-auth.guard';
+import { ScopeGuard } from '../../common/guards/scope.guard';
+import { RequireScopes } from '../../common/decorators/require-scopes.decorator';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { SidebarPageDto } from './dto/sidebar-page.dto';
@@ -52,8 +54,11 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
-@UseGuards(JwtAuthGuard)
+@ApiTags('Pages')
+@ApiBearerAuth()
+@UseGuards(JwtOrApiKeyAuthGuard, ScopeGuard)
 @Controller('pages')
 export class PageController {
   constructor(
@@ -67,6 +72,9 @@ export class PageController {
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
+  @ApiOperation({ summary: '获取页面信息' })
+  @ApiResponse({ status: 200, description: '返回页面详细内容及权限信息' })
+  @RequireScopes('page:read')
   @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getPage(@Body() dto: PageInfoDto, @AuthUser() user: User) {
@@ -161,6 +169,7 @@ export class PageController {
     );
   }
 
+  @RequireScopes('page:read')
   @HttpCode(HttpStatus.OK)
   @Post('backlinks-count')
   async getBacklinksCount(
@@ -176,6 +185,7 @@ export class PageController {
     return this.backlinkService.countByPageId(page.id, user.id);
   }
 
+  @RequireScopes('page:read')
   @HttpCode(HttpStatus.OK)
   @Post('backlinks')
   async getBacklinks(
@@ -197,6 +207,8 @@ export class PageController {
     );
   }
 
+  @ApiOperation({ summary: '创建页面' })
+  @ApiResponse({ status: 200, description: '页面创建成功' })
   @HttpCode(HttpStatus.OK)
   @Post('create')
   async create(
@@ -267,6 +279,8 @@ export class PageController {
     return { ...page, permissions };
   }
 
+  @ApiOperation({ summary: '更新页面' })
+  @ApiResponse({ status: 200, description: '页面更新成功' })
   @HttpCode(HttpStatus.OK)
   @Post('update')
   async update(@Body() updatePageDto: UpdatePageDto, @AuthUser() user: User) {
@@ -304,6 +318,8 @@ export class PageController {
     return { ...updatedPage, permissions };
   }
 
+  @ApiOperation({ summary: '删除页面' })
+  @ApiResponse({ status: 200, description: '页面删除成功' })
   @HttpCode(HttpStatus.OK)
   @Post('delete')
   async delete(
@@ -411,6 +427,9 @@ export class PageController {
     });
   }
 
+  @ApiOperation({ summary: '获取最近访问的页面' })
+  @ApiResponse({ status: 200, description: '返回最近页面列表' })
+  @RequireScopes('page:read')
   @HttpCode(HttpStatus.OK)
   @Post('recent')
   async getRecentPages(
@@ -736,6 +755,7 @@ export class PageController {
     return this.pageService.movePage(dto, movedPage);
   }
 
+  @RequireScopes('page:read')
   @HttpCode(HttpStatus.OK)
   @Post('/breadcrumbs')
   async getPageBreadcrumbs(@Body() dto: PageIdDto, @AuthUser() user: User) {

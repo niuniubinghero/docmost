@@ -25,6 +25,7 @@ import { FavoriteModule } from './favorite/favorite.module';
 import { SessionModule } from './session/session.module';
 import { TemplateModule } from './template/template.module';
 import { ApiKeyModule } from './api-key/api-key.module';
+import { WebhookModule } from './webhook/webhook.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { AiModule } from './ai/ai.module';
 import { AiProviderModule } from './ai-provider/ai-provider.module';
@@ -53,6 +54,7 @@ import { ClsMiddleware } from 'nestjs-cls';
     SessionModule,
     TemplateModule,
     ApiKeyModule,
+    WebhookModule,
     AuditLogModule,
     AiModule,
     AiProviderModule,
@@ -67,6 +69,7 @@ export class CoreModule implements NestModule {
       { path: 'health', method: RequestMethod.GET },
       { path: 'health/live', method: RequestMethod.GET },
       { path: 'billing/stripe/webhook', method: RequestMethod.POST },
+      { path: 'workspace/public', method: RequestMethod.POST },
     ];
 
     consumer

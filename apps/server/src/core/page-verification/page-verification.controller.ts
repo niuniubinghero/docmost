@@ -89,6 +89,13 @@ export class PageVerificationController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)
+    ) {
+      throw new ForbiddenException();
+    }
+
     return this.pageVerificationService.approveVerification(body.verificationId, workspace.id, user.id);
   }
 
@@ -99,6 +106,13 @@ export class PageVerificationController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)
+    ) {
+      throw new ForbiddenException();
+    }
+
     return this.pageVerificationService.rejectVerification(body.verificationId, workspace.id, user.id);
   }
 

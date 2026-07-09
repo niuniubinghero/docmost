@@ -24,7 +24,10 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Groups')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('groups')
 export class GroupController {

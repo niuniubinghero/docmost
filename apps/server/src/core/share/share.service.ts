@@ -26,6 +26,7 @@ import { validate as isValidUUID } from 'uuid';
 import { sql } from 'kysely';
 import { TransclusionService } from '../page/transclusion/transclusion.service';
 import { TransclusionLookup } from '../page/transclusion/transclusion.types';
+import { WebhookDispatcherService } from '../webhook/webhook-dispatcher.service';
 
 @Injectable()
 export class ShareService {
@@ -38,6 +39,7 @@ export class ShareService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly tokenService: TokenService,
     private readonly transclusionService: TransclusionService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   async getShareTree(shareId: string, workspaceId: string) {
@@ -79,7 +81,7 @@ export class ShareService {
         return shares;
       }
 
-      return await this.shareRepo.insertShare({
+      const share = await this.shareRepo.insertShare({
         key: nanoIdGen().toLowerCase(),
         pageId: page.id,
         includeSubPages: createShareDto.includeSubPages ?? false,
@@ -88,6 +90,14 @@ export class ShareService {
         spaceId: page.spaceId,
         workspaceId,
       });
+
+      void this.webhookDispatcher.dispatch(workspaceId, 'share.created', {
+        shareId: share.id,
+        pageId: page.id,
+        workspaceId,
+      });
+
+      return share;
     } catch (err) {
       this.logger.error(err);
       throw new BadRequestException('Failed to share page');

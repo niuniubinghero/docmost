@@ -33,6 +33,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { PasswordResetDto } from './dto/password-reset.dto';
 import { VerifyUserTokenDto } from './dto/verify-user-token.dto';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { createHmac } from 'crypto';
 import { validateSsoEnforcement } from './auth.util';
 import { ModuleRef } from '@nestjs/core';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
@@ -41,7 +42,10 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { Public } from '../../common/decorators/public.decorator';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Auth')
+@ApiBearerAuth()
 @SkipThrottle({ [AI_CHAT_THROTTLER]: true })
 @UseGuards(ThrottlerGuard)
 @Controller('auth')
@@ -57,6 +61,8 @@ export class AuthController {
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
+  @ApiOperation({ summary: '用户登录' })
+  @ApiResponse({ status: 200, description: '登录成功并设置 auth cookie' })
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(
@@ -109,6 +115,8 @@ export class AuthController {
     this.setAuthCookie(res, authToken);
   }
 
+  @ApiOperation({ summary: '初始化工作空间并创建管理员账户' })
+  @ApiResponse({ status: 200, description: '工作空间初始化成功' })
   @UseGuards(SetupGuard)
   @HttpCode(HttpStatus.OK)
   @Post('setup')
@@ -227,7 +235,11 @@ export class AuthController {
   @Public()
   @Get('casdoor/login')
   async casdoorLogin(@Res() res: FastifyReply, @Query('workspaceId') workspaceId: string) {
-    const state = Buffer.from(JSON.stringify({ workspaceId })).toString('base64');
+    const payload = JSON.stringify({ workspaceId });
+    const signature = createHmac('sha256', this.environmentService.getAppSecret())
+      .update(payload)
+      .digest('hex');
+    const state = Buffer.from(`${payload}.${signature}`).toString('base64');
     const loginUrl = this.casdoorService.getLoginUrl(state);
     res.redirect(loginUrl);
   }
@@ -240,7 +252,20 @@ export class AuthController {
     @Res({ passthrough: true }) res: FastifyReply,
   ) {
     try {
-      const { workspaceId } = JSON.parse(Buffer.from(state, 'base64').toString());
+      const decoded = Buffer.from(state, 'base64').toString();
+      const lastDot = decoded.lastIndexOf('.');
+      if (lastDot === -1) {
+        throw new Error('Invalid state format');
+      }
+      const payload = decoded.substring(0, lastDot);
+      const receivedSig = decoded.substring(lastDot + 1);
+      const expectedSig = createHmac('sha256', this.environmentService.getAppSecret())
+        .update(payload)
+        .digest('hex');
+      if (receivedSig !== expectedSig) {
+        throw new Error('State signature verification failed');
+      }
+      const { workspaceId } = JSON.parse(payload);
       const authToken = await this.casdoorService.handleCallback(code, workspaceId);
 
       res.setCookie('authToken', authToken, {

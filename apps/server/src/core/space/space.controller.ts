@@ -12,7 +12,9 @@ import {
 import { SpaceService } from './services/space.service';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtOrApiKeyAuthGuard } from '../../common/guards/jwt-or-api-key-auth.guard';
+import { ScopeGuard } from '../../common/guards/scope.guard';
+import { RequireScopes } from '../../common/decorators/require-scopes.decorator';
 import { SpaceIdDto } from './dto/space-id.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import { SpaceMemberService } from './services/space-member.service';
@@ -34,8 +36,11 @@ import {
 } from '../casl/interfaces/workspace-ability.type';
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
 import { CreateSpaceDto } from './dto/create-space.dto';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
-@UseGuards(JwtAuthGuard)
+@ApiTags('Spaces')
+@ApiBearerAuth()
+@UseGuards(JwtOrApiKeyAuthGuard, ScopeGuard)
 @Controller('spaces')
 export class SpaceController {
   constructor(
@@ -46,6 +51,9 @@ export class SpaceController {
     private readonly workspaceAbility: WorkspaceAbilityFactory,
   ) {}
 
+  @ApiOperation({ summary: '获取工作空间的空间列表' })
+  @ApiResponse({ status: 200, description: '返回用户可访问的空间列表' })
+  @RequireScopes('space:read')
   @HttpCode(HttpStatus.OK)
   @Post('/')
   async getWorkspaceSpaces(
@@ -90,6 +98,9 @@ export class SpaceController {
     return result;
   }
 
+  @ApiOperation({ summary: '获取空间信息' })
+  @ApiResponse({ status: 200, description: '返回空间详细信息和成员身份' })
+  @RequireScopes('space:read')
   @HttpCode(HttpStatus.OK)
   @Post('info')
   async getSpaceInfo(
@@ -127,6 +138,8 @@ export class SpaceController {
     return { ...space, membership };
   }
 
+  @ApiOperation({ summary: '创建空间' })
+  @ApiResponse({ status: 200, description: '空间创建成功' })
   @HttpCode(HttpStatus.OK)
   @Post('create')
   createSpace(
@@ -143,6 +156,8 @@ export class SpaceController {
     return this.spaceService.createSpace(user, workspace.id, createSpaceDto);
   }
 
+  @ApiOperation({ summary: '更新空间' })
+  @ApiResponse({ status: 200, description: '空间更新成功' })
   @HttpCode(HttpStatus.OK)
   @Post('update')
   async updateSpace(
@@ -160,6 +175,8 @@ export class SpaceController {
     return this.spaceService.updateSpace(updateSpaceDto, workspace.id);
   }
 
+  @ApiOperation({ summary: '删除空间' })
+  @ApiResponse({ status: 200, description: '空间删除成功' })
   @HttpCode(HttpStatus.OK)
   @Post('delete')
   async deleteSpace(

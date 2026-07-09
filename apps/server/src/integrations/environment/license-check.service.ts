@@ -2,6 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { EnvironmentService } from './environment.service';
 
+/**
+ * Community Edition License Service
+ *
+ * This is the community edition which intentionally unlocks all features.
+ * All license validation methods return permissive defaults to provide
+ * the full feature set without requiring a commercial license key.
+ *
+ * To re-enable license enforcement for an enterprise build, replace these
+ * stub methods with actual license validation logic.
+ */
 @Injectable()
 export class LicenseCheckService {
   constructor(

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Post,
   Req,
   Res,
@@ -36,7 +37,10 @@ import { LicenseCheckService } from '../../../integrations/environment/license-c
 import { CheckHostnameDto } from '../dto/check-hostname.dto';
 import { RemoveWorkspaceUserDto } from '../dto/remove-workspace-user.dto';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Workspace')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('workspace')
 export class WorkspaceController {
@@ -50,18 +54,28 @@ export class WorkspaceController {
   ) {}
 
   @Public()
+  @ApiOperation({ summary: '获取工作空间公开信息' })
+  @ApiResponse({ status: 200, description: '返回工作空间公开数据' })
   @HttpCode(HttpStatus.OK)
   @Post('/public')
   async getWorkspacePublicInfo(@Req() req: any) {
-    return this.workspaceService.getWorkspacePublicData(req.raw.workspaceId);
+    const workspaceId = req.raw?.workspaceId;
+    if (!workspaceId) {
+      throw new NotFoundException('Workspace not found');
+    }
+    return this.workspaceService.getWorkspacePublicData(workspaceId);
   }
 
+  @ApiOperation({ summary: '获取工作空间信息' })
+  @ApiResponse({ status: 200, description: '返回工作空间详细信息' })
   @HttpCode(HttpStatus.OK)
   @Post('/info')
   async getWorkspace(@AuthWorkspace() workspace: Workspace) {
     return this.workspaceService.getWorkspaceInfo(workspace.id);
   }
 
+  @ApiOperation({ summary: '获取工作空间权益信息' })
+  @ApiResponse({ status: 200, description: '返回工作空间的套餐和功能权益' })
   @HttpCode(HttpStatus.OK)
   @Post('entitlements')
   async getEntitlements(@AuthWorkspace() workspace: Workspace) {
@@ -79,6 +93,8 @@ export class WorkspaceController {
     };
   }
 
+  @ApiOperation({ summary: '更新工作空间设置' })
+  @ApiResponse({ status: 200, description: '工作空间更新成功' })
   @HttpCode(HttpStatus.OK)
   @Post('update')
   async updateWorkspace(

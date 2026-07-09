@@ -51,7 +51,12 @@ export class CommentService {
     createCommentDto: CreateCommentDto,
   ) {
     const { page, workspaceId, user } = opts;
-    const commentContent = JSON.parse(createCommentDto.content);
+    let commentContent: any;
+    try {
+      commentContent = JSON.parse(createCommentDto.content);
+    } catch {
+      throw new BadRequestException('Invalid comment content: malformed JSON');
+    }
 
     if (createCommentDto.parentCommentId) {
       const parentComment = await this.commentRepo.findById(
@@ -163,7 +168,12 @@ export class CommentService {
     updateCommentDto: UpdateCommentDto,
     authUser: User,
   ): Promise<Comment> {
-    const commentContent = JSON.parse(updateCommentDto.content);
+    let commentContent: any;
+    try {
+      commentContent = JSON.parse(updateCommentDto.content);
+    } catch {
+      throw new BadRequestException('Invalid comment content: malformed JSON');
+    }
 
     if (comment.creatorId !== authUser.id) {
       throw new ForbiddenException('You can only edit your own comments');

@@ -87,6 +87,13 @@ export class CasdoorService {
     const tokenData = await this.exchangeCodeForToken(code);
     const userInfo = await this.getUserInfo(tokenData.access_token);
 
+    if (!userInfo.email) {
+      this.logger.warn('Casdoor OIDC did not return email for user');
+      throw new BadRequestException(
+        'Email is required from Casdoor but was not provided. Please ensure your Casdoor application has the email scope enabled.',
+      );
+    }
+
     let user = await this.userRepo.findByEmail(userInfo.email, workspaceId);
 
     if (!user) {

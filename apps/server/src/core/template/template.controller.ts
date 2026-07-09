@@ -15,10 +15,15 @@ import { TemplateService } from './template.service';
 import { CreateTemplateDto, UpdateTemplateDto } from './dto/template.dto';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
+import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../casl/interfaces/workspace-ability.type';
+import {
+  SpaceCaslAction,
+  SpaceCaslSubject,
+} from '../casl/interfaces/space-ability.type';
 
 @UseGuards(JwtAuthGuard)
 @Controller('templates')
@@ -26,6 +31,7 @@ export class TemplateController {
   constructor(
     private templateService: TemplateService,
     private workspaceAbility: WorkspaceAbilityFactory,
+    private spaceAbility: SpaceAbilityFactory,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -105,6 +111,13 @@ export class TemplateController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const spaceAbility = await this.spaceAbility.createForUser(user, body.spaceId);
+    if (
+      spaceAbility.cannot(SpaceCaslAction.Create, SpaceCaslSubject.Page)
+    ) {
+      throw new ForbiddenException('You do not have permission to create pages in this space');
+    }
+
     return this.templateService.useTemplate(
       body.templateId,
       workspace.id,

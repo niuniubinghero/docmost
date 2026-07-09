@@ -34,7 +34,7 @@ import {
   htmlToJson,
   jsonToNode,
   jsonToText,
-} from 'src/collaboration/collaboration.util';
+} from '../../../collaboration/collaboration.util';
 import {
   CopyPageMapEntry,
   ICopyPageAttachment,
@@ -55,6 +55,7 @@ import { markdownToHtml } from '@docmost/editor-ext';
 import { WatcherService } from '../../watcher/watcher.service';
 import { sql } from 'kysely';
 import { TransclusionService } from '../transclusion/transclusion.service';
+import { WebhookDispatcherService } from '../../webhook/webhook-dispatcher.service';
 
 @Injectable()
 export class PageService {
@@ -73,6 +74,7 @@ export class PageService {
     private collaborationGateway: CollaborationGateway,
     private readonly watcherService: WatcherService,
     private readonly transclusionService: TransclusionService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   async findById(
@@ -155,6 +157,13 @@ export class PageService {
       .catch((err) =>
         this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
       );
+
+    void this.webhookDispatcher.dispatch(workspaceId, 'page.created', {
+      pageId: page.id,
+      spaceId: createPageDto.spaceId,
+      title: page.title,
+      creatorId: userId,
+    });
 
     return page;
   }
@@ -244,6 +253,12 @@ export class PageService {
         user,
       );
     }
+
+    void this.webhookDispatcher.dispatch(page.workspaceId, 'page.updated', {
+      pageId: page.id,
+      spaceId: page.spaceId,
+      title: updatePageDto.title ?? page.title,
+    });
 
     return await this.pageRepo.findById(page.id, {
       includeSpace: true,
@@ -1024,7 +1039,15 @@ export class PageService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
+    const page = await this.pageRepo.findById(pageId);
     await this.pageRepo.removePage(pageId, userId, workspaceId);
+
+    if (page) {
+      void this.webhookDispatcher.dispatch(workspaceId, 'page.deleted', {
+        pageId,
+        spaceId: page.spaceId,
+      });
+    }
   }
 
   private async parseProsemirrorContent(

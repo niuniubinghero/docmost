@@ -16,7 +16,9 @@ import {
   SearchSuggestionDTO,
 } from './dto/search.dto';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtOrApiKeyAuthGuard } from '../../common/guards/jwt-or-api-key-auth.guard';
+import { ScopeGuard } from '../../common/guards/scope.guard';
+import { RequireScopes } from '../../common/decorators/require-scopes.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import SpaceAbilityFactory from '../casl/abilities/space-ability.factory';
 import {
@@ -24,11 +26,14 @@ import {
   SpaceCaslSubject,
 } from '../casl/interfaces/space-ability.type';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
-import { Public } from 'src/common/decorators/public.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { ModuleRef } from '@nestjs/core';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
-@UseGuards(JwtAuthGuard)
+@ApiTags('Search')
+@ApiBearerAuth()
+@UseGuards(JwtOrApiKeyAuthGuard, ScopeGuard)
 @Controller('search')
 export class SearchController {
   private readonly logger = new Logger(SearchController.name);
@@ -40,6 +45,9 @@ export class SearchController {
     private moduleRef: ModuleRef,
   ) {}
 
+  @ApiOperation({ summary: '搜索页面' })
+  @ApiResponse({ status: 200, description: '返回匹配的搜索结果' })
+  @RequireScopes('search:read')
   @HttpCode(HttpStatus.OK)
   @Post()
   async pageSearch(

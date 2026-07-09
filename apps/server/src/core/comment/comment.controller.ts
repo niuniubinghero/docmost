@@ -32,7 +32,10 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { WsService } from '../../ws/ws.service';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('Comments')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('comments')
 export class CommentController {
@@ -85,19 +88,18 @@ export class CommentController {
   @HttpCode(HttpStatus.OK)
   @Post('/')
   async findPageComments(
-    @Body() input: PageIdDto,
-    @Body()
-    pagination: PaginationOptions,
+    @Body() body: PageIdDto & PaginationOptions,
     @AuthUser() user: User,
   ) {
-    const page = await this.pageRepo.findById(input.pageId);
+    const { pageId, ...pagination } = body;
+    const page = await this.pageRepo.findById(pageId);
     if (!page) {
       throw new NotFoundException('Page not found');
     }
 
     await this.pageAccessService.validateCanView(page, user);
 
-    return this.commentService.findByPageId(page.id, pagination);
+    return this.commentService.findByPageId(page.id, pagination as PaginationOptions);
   }
 
   @HttpCode(HttpStatus.OK)
