@@ -14,8 +14,10 @@ export class DomainMiddleware implements NestMiddleware {
     res: FastifyReply['raw'],
     next: () => void,
   ) {
+    console.log('[DomainMiddleware] URL:', req.url);
     if (this.environmentService.isSelfHosted()) {
       const workspace = await this.workspaceRepo.findFirst();
+      console.log('[DomainMiddleware] Workspace found:', !!workspace);
       if (!workspace) {
         //throw new NotFoundException('Workspace not found');
         (req as any).workspaceId = null;

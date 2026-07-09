@@ -21,7 +21,9 @@ export const AuditEvent = {
   // API Keys
   API_KEY_CREATED: 'api_key.created',
   API_KEY_UPDATED: 'api_key.updated',
+  API_KEY_REVOKED: 'api_key.revoked',
   API_KEY_DELETED: 'api_key.deleted',
+  API_KEY_USED: 'api_key.used',
 
   // SCIM Tokens
   SCIM_TOKEN_CREATED: 'scim_token.created',

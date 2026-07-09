@@ -1,4 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import {
   FastifyAdapter,
@@ -114,6 +115,7 @@ async function bootstrap() {
         '/api/health',
         '/api/billing/stripe/webhook',
         '/api/workspace/check-hostname',
+        '/api/workspace/public',
         '/api/sso/google',
         '/api/workspace/create',
         '/api/workspace/joined',
@@ -141,7 +143,15 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
+  const corsAllowedOrigins = [
+    environmentService.getAppUrl(),
+    ...environmentService.getCorsAllowedOrigins(),
+  ];
+  app.enableCors({
+    origin: corsAllowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  });
   app.useGlobalInterceptors(new TransformHttpResponseInterceptor(reflector));
   app.enableShutdownHooks();
 
@@ -154,6 +164,26 @@ async function bootstrap() {
   process.on('uncaughtException', (error) => {
     logger.error('UncaughtException:', error);
   });
+
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Docmost API')
+      .setDescription('Docmost REST API documentation')
+      .setVersion(process.env.npm_package_version || '0.0.0')
+      .addServer(environmentService.getAppUrl())
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+    // SwaggerModule.setup 默认在 /api/docs-json 提供 JSON
+    // 额外注册 /api-json 路径以符合 spec 要求
+    app.getHttpAdapter().get('/api-json', (req, res) => {
+      res.header('Content-Type', 'application/json');
+      res.send(document);
+    });
+  }
 
   const port = process.env.PORT || 3000;
   const host = process.env.HOST || '0.0.0.0';

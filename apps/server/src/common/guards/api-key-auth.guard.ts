@@ -2,14 +2,23 @@ import {
   Injectable,
   CanActivate,
   ExecutionContext,
+  Inject,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiKeyRepo } from '@docmost/db/repos/api-key/api-key.repo';
 import { createHash } from 'node:crypto';
+import { AuditEvent, AuditResource } from '../events/audit-events';
+import {
+  AUDIT_SERVICE,
+  IAuditService,
+} from '../../integrations/audit/audit.service';
 
 @Injectable()
 export class ApiKeyAuthGuard implements CanActivate {
-  constructor(private apiKeyRepo: ApiKeyRepo) {}
+  constructor(
+    private apiKeyRepo: ApiKeyRepo,
+    @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -33,8 +42,37 @@ export class ApiKeyAuthGuard implements CanActivate {
 
     await this.apiKeyRepo.updateLastUsed(apiKeyRecord.id, apiKeyRecord.workspaceId);
 
-    request.user = { id: apiKeyRecord.creatorId };
-    request.workspace = { id: apiKeyRecord.workspaceId };
+    // Record API key usage as an audit event (fire-and-forget: must never
+    // block or fail the incoming API request).
+    void Promise.resolve(
+      this.auditService.logWithContext(
+        {
+          event: AuditEvent.API_KEY_USED,
+          resourceType: AuditResource.API_KEY,
+          resourceId: apiKeyRecord.id,
+          metadata: {
+            apiKeyId: apiKeyRecord.id,
+            apiKeyName: apiKeyRecord.name,
+          },
+        },
+        {
+          workspaceId: apiKeyRecord.workspaceId,
+          actorId: apiKeyRecord.creatorId,
+          actorType: 'api_key',
+          ipAddress: request.ip ?? request.socket?.remoteAddress,
+          userAgent: request.headers?.['user-agent'],
+        },
+      ),
+    ).catch(() => {});
+
+    // Match the shape set by JwtStrategy.validate: { user, workspace }
+    // so @AuthUser() (request.user.user) and @AuthWorkspace() (request.user.workspace) work.
+    request.user = {
+      user: { id: apiKeyRecord.creatorId },
+      workspace: { id: apiKeyRecord.workspaceId },
+    };
+    // null scopes => full access; non-null => restrict via @RequireScopes + ScopeGuard
+    request.apiKeyScopes = apiKeyRecord.scopes;
 
     return true;
   }
