@@ -7,9 +7,18 @@ FROM base AS builder
 
 WORKDIR /app
 
+# Copy dependency declarations first for better layer caching
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY apps/server/package.json ./apps/server/
+COPY apps/client/package.json ./apps/client/
+COPY packages/editor-ext/package.json ./packages/editor-ext/
+COPY patches/ ./patches/
+
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
 COPY . .
 
-RUN rm -f pnpm-lock.yaml && pnpm install --no-frozen-lockfile
 RUN pnpm build
 
 FROM base AS installer
@@ -31,19 +40,20 @@ COPY --from=builder /app/packages/editor-ext/package.json /app/packages/editor-e
 
 # Copy root package files
 COPY --from=builder /app/package.json /app/package.json
-COPY --from=builder /app/pnpm*.yaml /app/
+COPY --from=builder /app/pnpm-lock.yaml /app/pnpm-lock.yaml
+COPY --from=builder /app/pnpm-workspace.yaml /app/pnpm-workspace.yaml
 COPY --from=builder /app/.npmrc /app/.npmrc
 
 # Copy patches
 COPY --from=builder /app/patches /app/patches
 
-RUN rm -rf apps/mobile && rm -f pnpm-lock.yaml
+RUN rm -rf apps/mobile
 
 RUN chown -R node:node /app
 
 USER node
 
-RUN pnpm install --no-frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod
 
 RUN mkdir -p /app/data/storage
 

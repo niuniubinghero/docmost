@@ -5,9 +5,9 @@ services:
       - db
       - redis
     environment:
-      APP_URL: 'http://localhost:3000'
-      APP_SECRET: 'docmost-secret-key-for-development-2024'
-      DATABASE_URL: 'postgresql://docmost:STRONG_DB_PASSWORD@db:5432/docmost'
+      APP_URL: '${APP_URL:-http://localhost:3000}'
+      APP_SECRET: '${APP_SECRET}'
+      DATABASE_URL: 'postgresql://docmost:${POSTGRES_PASSWORD}@db:5432/docmost'
       REDIS_URL: 'redis://redis:6379'
     ports:
       - "3000:3000"
@@ -21,7 +21,7 @@ services:
       - db
     environment:
       driverName: postgres
-      dataSourceName: "host=db port=5432 user=docmost password=STRONG_DB_PASSWORD dbname=casdoor sslmode=disable"
+      dataSourceName: "host=db port=5432 user=docmost password=${POSTGRES_PASSWORD} dbname=casdoor sslmode=disable"
       origin: 'http://localhost:8000'
       staticBaseUrl: 'https://cdn.jsdelivr.net/gh/casbin/static-resources@latest'
     ports:
@@ -33,7 +33,7 @@ services:
     environment:
       POSTGRES_DB: docmost
       POSTGRES_USER: docmost
-      POSTGRES_PASSWORD: STRONG_DB_PASSWORD
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
     ports:
       - "5432:5432"
     restart: unless-stopped

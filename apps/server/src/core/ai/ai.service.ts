@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { AiProvider } from '@docmost/db/repos/ai-provider/ai-provider.repo';
 import type { AiToolDefinition, AiToolCall } from './ai-tools';
+import * as cheerio from 'cheerio';
 
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -111,6 +112,7 @@ export class AiService {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -118,20 +120,22 @@ export class AiService {
       }
 
       const html = await response.text();
+      const $ = cheerio.load(html);
       const results: Array<{ title: string; url: string; snippet: string }> = [];
 
-      const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/g;
-      let match;
+      $('.result').each((_, el) => {
+        if (results.length >= 5) return false;
 
-      while ((match = resultRegex.exec(html)) !== null && results.length < 5) {
-        const url = match[1];
-        const title = match[2].replace(/<[^>]*>/g, '').trim();
-        const snippet = match[3].replace(/<[^>]*>/g, '').trim();
+        const titleEl = $(el).find('.result__a');
+        const snippetEl = $(el).find('.result__snippet');
+        const url = titleEl.attr('href') || '';
+        const title = titleEl.text().trim();
+        const snippet = snippetEl.text().trim();
 
         if (url && title) {
           results.push({ title, url, snippet });
         }
-      }
+      });
 
       return results;
     } catch (error: any) {
@@ -538,6 +542,38 @@ export class AiService {
     const url = `${baseUrl}/models/${provider.modelName}:streamGenerateContent?alt=sse`;
     const timeoutMs = options?.timeoutMs ?? 120000;
 
+    const body: any = {
+      contents: messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        })),
+      generationConfig: {
+        maxOutputTokens: options?.maxTokens ?? 2048,
+        temperature: options?.temperature ?? 0.7,
+      },
+    };
+
+    // Add system instruction if present
+    const systemMsg = messages.find((m) => m.role === 'system');
+    if (systemMsg) {
+      body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+    }
+
+    // Add tools if provided (Gemini function calling)
+    if (options?.tools?.length) {
+      body.tools = [
+        {
+          functionDeclarations: options.tools.map((t) => ({
+            name: t.function.name,
+            description: t.function.description,
+            parameters: t.function.parameters,
+          })),
+        },
+      ];
+    }
+
     const response = await this.withTimeout(
       fetch(url, {
         method: 'POST',
@@ -545,16 +581,7 @@ export class AiService {
           'Content-Type': 'application/json',
           'x-goog-api-key': provider.apiKey || '',
         },
-        body: JSON.stringify({
-          contents: messages.map((m) => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }],
-          })),
-          generationConfig: {
-            maxOutputTokens: options?.maxTokens ?? 2048,
-            temperature: options?.temperature ?? 0.7,
-          },
-        }),
+        body: JSON.stringify(body),
       }),
       30000,
     );
@@ -587,8 +614,25 @@ export class AiService {
             const data = line.slice(6);
             try {
               const parsed = JSON.parse(data);
-              const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (text) yield { type: 'content', content: text };
+              const candidate = parsed.candidates?.[0];
+              if (!candidate) continue;
+
+              const parts = candidate.content?.parts || [];
+              for (const part of parts) {
+                if (part.text) {
+                  yield { type: 'content', content: part.text };
+                }
+                if (part.functionCall) {
+                  yield {
+                    type: 'tool_call',
+                    toolCall: {
+                      id: `gemini-tc-${Date.now()}`,
+                      name: part.functionCall.name,
+                      arguments: JSON.stringify(part.functionCall.args || {}),
+                    },
+                  };
+                }
+              }
             } catch (e) {
               // Skip invalid JSON
             }
