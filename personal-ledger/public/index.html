@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人记账本</title>
+  <!-- React -->
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <!-- ECharts -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+    .app { max-width: 960px; margin: 0 auto; padding: 16px; }
+    /* 头部 */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header h1 { font-size: 22px; }
+    .header .actions { display: flex; gap: 10px; }
+    /* 按钮 */
+    .btn { padding: 7px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: opacity .2s; }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #4f7cff; color: #fff; }
+    .btn-success { background: #36b37e; color: #fff; }
+    .btn-danger { background: #ff5630; color: #fff; }
+    .btn-default { background: #fff; color: #333; border: 1px solid #ddd; }
+    /* 汇总卡片 */
+    .summary { display: flex; gap: 12px; margin-bottom: 20px; }
+    .summary-card { flex: 1; background: #fff; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .summary-card .label { font-size: 13px; color: #999; margin-bottom: 6px; }
+    .summary-card .value { font-size: 22px; font-weight: 700; }
+    .summary-card .value.income { color: #36b37e; }
+    .summary-card .value.expense { color: #ff5630; }
+    .summary-card .value.balance { color: #4f7cff; }
+    /* 图表 */
+    .charts { display: flex; gap: 12px; margin-bottom: 20px; }
+    .chart-box { flex: 1; background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .chart-box h3 { font-size: 15px; margin-bottom: 8px; }
+    .chart-canvas { width: 100%; height: 260px; }
+    /* 账单列表 */
+    .list-box { background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .list-box h3 { font-size: 15px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+    th { color: #999; font-weight: 500; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+    .tag-expense { background: #ffe0e0; color: #ff5630; }
+    .tag-income { background: #d4f4e8; color: #36b37e; }
+    /* 模态框 */
+    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index:999; }
+    .modal { background:#fff; border-radius:10px; padding:24px; width:380px; max-width:90vw; }
+    .modal h2 { font-size:18px; margin-bottom:16px; }
+    .form-group { margin-bottom:14px; }
+    .form-group label { display:block; font-size:13px; color:#666; margin-bottom:5px; }
+    .form-group input, .form-group select { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:14px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+    .empty { text-align:center; padding:30px; color:#ccc; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const CATEGORIES = {
+  expense: ['餐饮', '交通', '购物', '娱乐', '水电', '医疗', '教育', '其他'],
+  income:  ['工资', '兼职', '投资', '红包', '其他'],
+};
+
+function App() {
+  const [transactions, setTransactions] = useState([]);
+  const [monthlyStats, setMonthlyStats] = useState([]);
+  const [dailyStats, setDailyStats] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
+  const pieRef = useRef(null);
+  const barRef = useRef(null);
+  const pieChart = useRef(null);
+  const barChart = useRef(null);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  const fetchData = async () => {
+    const [txRes, monthRes, dailyRes] = await Promise.all([
+      fetch('/api/transactions').then(r => r.json()),
+      fetch(`/api/stats/monthly?month=${currentMonth}`).then(r => r.json()),
+      fetch(`/api/stats/daily?month=${currentMonth}`).then(r => r.json()),
+    ]);
+    setTransactions(txRes);
+    setMonthlyStats(monthRes.data);
+    setDailyStats(dailyRes.data);
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  // 渲染饼图
+  useEffect(() => {
+    if (pieRef.current) {
+      if (!pieChart.current) pieChart.current = echarts.init(pieRef.current);
+      const expenseData = monthlyStats.filter(s => s.type === 'expense');
+      pieChart.current.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+        series: [{
+          type: 'pie',
+          radius: ['40%', '70%'],
+          label: { fontSize: 12 },
+          data: expenseData.map(d => ({ name: d.category, value: d.total })),
+        }],
+        color: ['#ff6b6b','#ffa940','#ffd666','#36cfc9','#597ef7','#9254de','#ff85c0','#8c8c8c'],
+      });
+    }
+  }, [monthlyStats]);
+
+  // 渲染柱状图
+  useEffect(() => {
+    if (barRef.current) {
+      if (!barChart.current) barChart.current = echarts.init(barRef.current);
+      barChart.current.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['支出', '收入'], top: 0 },
+        grid: { top: 30, left: 40, right: 15, bottom: 30 },
+        xAxis: { type: 'category', data: dailyStats.map(d => d.date.slice(8)), axisLabel: { fontSize: 11 } },
+        yAxis: { type: 'value' },
+        series: [
+          { name: '支出', type: 'bar', data: dailyStats.map(d => d.expense), itemStyle: { color: '#ff5630' } },
+          { name: '收入', type: 'bar', data: dailyStats.map(d => d.income), itemStyle: { color: '#36b37e' } },
+        ],
+      });
+    }
+  }, [dailyStats]);
+
+  // 汇总
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const balance = totalIncome - totalExpense;
+
+  const handleDelete = async (id) => {
+    if (!confirm('确认删除这条记录？')) return;
+    await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+    fetchData();
+  };
+
+  const handleExport = () => {
+    window.location.href = '/api/export';
+  };
+
+  const handleEdit = (tx) => {
+    setEditingTx(tx);
+    setShowModal(true);
+  };
+
+  const handleAdd = () => {
+    setEditingTx(null);
+    setShowModal(true);
+  };
+
+  const handleSave = async (data) => {
+    if (editingTx) {
+      await fetch(`/api/transactions/${editingTx.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+    } else {
+      await fetch('/api/transactions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+    }
+    setShowModal(false);
+    fetchData();
+  };
+
+  return (
+    <div className="app">
+      <div className="header">
+        <h1>个人记账本</h1>
+        <div className="actions">
+          <button className="btn btn-default" onClick={handleExport}>导出CSV</button>
+          <button className="btn btn-primary" onClick={handleAdd}>+ 新增</button>
+        </div>
+      </div>
+
+      {/* 汇总卡片 */}
+      <div className="summary">
+        <div className="summary-card">
+          <div className="label">总支出</div>
+          <div className="value expense">¥{totalExpense.toFixed(2)}</div>
+        </div>
+        <div className="summary-card">
+          <div className="label">总收入</div>
+          <div className="value income">¥{totalIncome.toFixed(2)}</div>
+        </div>
+        <div className="summary-card">
+          <div className="label">结余</div>
+          <div className="value balance">¥{balance.toFixed(2)}</div>
+        </div>
+      </div>
+
+      {/* 图表 */}
+      <div className="charts">
+        <div className="chart-box">
+          <h3>支出分类（{currentMonth}）</h3>
+          <div ref={pieRef} className="chart-canvas"></div>
+        </div>
+        <div className="chart-box">
+          <h3>每日收支趋势</h3>
+          <div ref={barRef} className="chart-canvas"></div>
+        </div>
+      </div>
+
+      {/* 账单列表 */}
+      <div className="list-box">
+        <h3>账单明细（共 {transactions.length} 条）</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>类型</th>
+              <th>分类</th>
+              <th>金额</th>
+              <th>备注</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.length === 0 ? (
+              <tr><td colSpan="6" className="empty">暂无数据，点击右上角新增</td></tr>
+            ) : transactions.map(tx => (
+              <tr key={tx.id}>
+                <td>{tx.date}</td>
+                <td><span className={tx.type === 'expense' ? 'tag tag-expense' : 'tag tag-income'}>{tx.type === 'expense' ? '支出' : '收入'}</span></td>
+                <td>{tx.category}</td>
+                <td style={{ color: tx.type === 'expense' ? '#ff5630' : '#36b37e', fontWeight: 600 }}>
+                  {tx.type === 'expense' ? '-' : '+'}¥{tx.amount}
+                </td>
+                <td style={{ color: '#999' }}>{tx.note || '-'}</td>
+                <td>
+                  <button className="btn btn-default" style={{ padding:'3px 10px', marginRight:6 }} onClick={() => handleEdit(tx)}>编辑</button>
+                  <button className="btn btn-danger" style={{ padding:'3px 10px' }} onClick={() => handleDelete(tx.id)}>删除</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* 新增/编辑弹窗 */}
+      {showModal && (
+        <TxForm
+          tx={editingTx}
+          onSave={handleSave}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TxForm({ tx, onSave, onClose }) {
+  const [type, setType] = useState(tx ? tx.type : 'expense');
+  const [category, setCategory] = useState(tx ? tx.category : '餐饮');
+  const [amount, setAmount] = useState(tx ? tx.amount : '');
+  const [note, setNote] = useState(tx ? tx.note : '');
+  const [date, setDate] = useState(tx ? tx.date : new Date().toISOString().slice(0, 10));
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!amount || !category || !date) return;
+    onSave({ type, category, amount: parseFloat(amount), note, date });
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <h2>{tx ? '编辑账单' : '新增账单'}</h2>
+        <form onSubmit={submit}>
+          <div className="form-group">
+            <label>类型</label>
+            <select value={type} onChange={e => { setType(e.target.value); setCategory(CATEGORIES[e.target.value][0]); }}>
+              <option value="expense">支出</option>
+              <option value="income">收入</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>分类</label>
+            <select value={category} onChange={e => setCategory(e.target.value)}>
+              {CATEGORIES[type].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>金额 (¥)</label>
+            <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required />
+          </div>
+          <div className="form-group">
+            <label>日期</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+          </div>
+          <div className="form-group">
+            <label>备注</label>
+            <input type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="可选" />
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-default" onClick={onClose}>取消</button>
+            <button type="submit" className="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
